@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""对同一真实 GIFTI 输入运行 CPU reference 与 GPU pipeline 端到端 A/B。"""
+"""CAT-Surface GPU implementation."""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ def _run_reference(
     loop: int,
     code: int,
 ) -> float:
-    """运行官方 C reference 并返回包含 I/O 的墙钟时间。"""
+    """Run reference."""
 
     command = [
         str(binary),
@@ -68,32 +68,31 @@ def _run_reference(
     elapsed = time.perf_counter() - start
     if completed.returncode != 0:
         raise RuntimeError(
-            "CPU reference 失败，返回码 "
+            "CPU reference failed with exit code "
             f"{completed.returncode}\n{completed.stderr[-3000:]}"
         )
     if not output.is_file():
-        raise RuntimeError(f"CPU reference 没有生成输出：{output}")
+        raise RuntimeError(f"CPU reference did not produce output: {output}")
     return elapsed
 
 
 def _compare_meshes(reference_path: Path, candidate_path: Path) -> dict[str, object]:
-    """比较最终 GIFTI 的拓扑和顶点误差。"""
+    """Compare meshes."""
 
     reference = read_gifti_mesh(reference_path)
     candidate = read_gifti_mesh(candidate_path)
     if reference.faces.shape != candidate.faces.shape:
         raise ValueError(
-            f"面片形状不一致：{reference.faces.shape} vs {candidate.faces.shape}"
+            f"Face shape does not match : {reference.faces.shape} vs {candidate.faces.shape}"
         )
     if not np.array_equal(reference.faces, candidate.faces):
-        raise ValueError("最终 GIFTI 面片数组不一致")
+        raise ValueError("GIFTI face array does not match")
     if reference.vertices.shape != candidate.vertices.shape:
         raise ValueError(
-            f"顶点形状不一致：{reference.vertices.shape} vs {candidate.vertices.shape}"
+            f"Vertex shape does not match : {reference.vertices.shape} vs {candidate.vertices.shape}"
         )
     difference = np.abs(
-        reference.vertices.astype(np.float64)
-        - candidate.vertices.astype(np.float64)
+        reference.vertices.astype(np.float64) - candidate.vertices.astype(np.float64)
     )
     return {
         "faces_exact": True,
@@ -105,7 +104,7 @@ def _compare_meshes(reference_path: Path, candidate_path: Path) -> dict[str, obj
 
 
 def main() -> int:
-    """运行同输入 CPU/GPU A/B 并输出端到端收益。"""
+    """Main."""
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--reference-cli", type=Path, required=True)
@@ -122,12 +121,12 @@ def main() -> int:
     parser.add_argument(
         "--rotation-geometry-probe",
         type=Path,
-        help="官方 coarse 几何导出 helper；供 CUDA hybrid feature 后端使用",
+        help="Upstream coarse geometry helper: CUDA hybrid feature backend use",
     )
     parser.add_argument(
         "--rotation-depth-probe",
         type=Path,
-        help="官方 raw depth-potential 导出 helper；供 cuda-official-depth 使用",
+        help="Upstream raw depth-potential helper: cuda-official-depth use",
     )
     parser.add_argument(
         "--rotation-feature-backend",
@@ -139,13 +138,13 @@ def main() -> int:
             "official-cpu",
         ),
         default="auto",
-        help="初始旋转特征后端；hybrid 后端需要显式提供对应官方 helper",
+        help="Rotation feature backend : hybrid backend explicit upstream helper",
     )
     parser.add_argument(
         "--rotation-feature-solver",
         choices=("colored-sor", "pcg"),
         default="colored-sor",
-        help="GPU depth-potential 求解器；默认使用图着色并行 SOR",
+        help="GPU depth-potential : default use SOR",
     )
     parser.add_argument("--stencil-builder", type=Path, required=True)
     parser.add_argument("--rotated-stencil-builder", type=Path, required=True)
@@ -153,7 +152,7 @@ def main() -> int:
         "--stencil-threads",
         type=int,
         default=8,
-        help="每个 stencil helper 的 CPU worker 数；默认 8",
+        help="Each stencil helper CPU worker : default 8",
     )
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--kernel", default="triton")
@@ -161,17 +160,17 @@ def main() -> int:
         "--dartel-dtype",
         choices=("float64", "float32"),
         default="float64",
-        help="DARTEL 显式计算精度；默认 FP64，FP32 为容差实验路径",
+        help="DARTEL explicit : default FP64, FP32",
     )
     parser.add_argument(
         "--squaring-kernel",
         choices=("auto", "torch", "triton"),
         default="auto",
-        help="DARTEL squaring kernel；默认使用 Triton，torch 供 A/B 对照",
+        help="DARTEL squaring kernel: default use Triton, torch A/B",
     )
     parser.add_argument("--steps", type=int, default=2)
     parser.add_argument("--runs", type=int, default=1)
-    parser.add_argument("--avg", action="store_true", help="执行官方 -avg 双极点平均")
+    parser.add_argument("--avg", action="store_true", help="Run upstream -avg")
     parser.add_argument("--loop", type=int, default=6)
     parser.add_argument("--cycles", type=int, default=3)
     parser.add_argument("--nit", type=int, default=3)
@@ -181,25 +180,25 @@ def main() -> int:
         "--parallel-sides",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="CUDA 下重叠 source/target 曲面阶段；默认开启",
+        help="CUDA source/target surface : default",
     )
     parser.add_argument(
         "--optimized-dartel",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="启用 DARTEL 多通道共享采样；默认开启",
+        help="DARTEL : default",
     )
     parser.add_argument(
         "--cuda-graph",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="至少三次正式 solve 时启用固定 shape 的 CUDA Graph；默认开启",
+        help="Solve shape CUDA Graph: default",
     )
     parser.add_argument(
         "--point-chunk",
         type=int,
         default=4096,
-        help="旋转 cost 的点块大小；默认 4096，显存不足时可降为 512",
+        help="Rotation cost : default 4096, 512",
     )
     parser.add_argument("--rotation-grid-size", type=int, default=128)
     parser.add_argument("--rotation-margin", type=int, default=1)
@@ -208,13 +207,13 @@ def main() -> int:
         "--max-vertex-error",
         type=float,
         default=1e-3,
-        help="允许 GPU 与 CPU 最终顶点的最大绝对误差",
+        help="GPU and CPU vertex",
     )
     args = parser.parse_args()
 
     args.cpu_output.parent.mkdir(parents=True, exist_ok=True)
     args.gpu_output.parent.mkdir(parents=True, exist_ok=True)
-    print("[1/2] 运行 CPU reference ...", flush=True)
+    print("[1/2] CPU reference ...", flush=True)
     reference_seconds = _run_reference(
         args.reference_cli,
         args.source_surface,
@@ -228,7 +227,7 @@ def main() -> int:
         loop=args.loop,
         code=args.code,
     )
-    print("[2/2] 运行 GPU rotation + DARTEL + GIFTI ...", flush=True)
+    print("[2/2] GPU rotation + DARTEL + GIFTI ...", flush=True)
     result = run_cat_surface_gpu_pipeline(
         args.source_surface,
         args.source_sphere,
@@ -269,7 +268,7 @@ def main() -> int:
     comparison = _compare_meshes(args.cpu_output, args.gpu_output)
     if comparison["vertices_max_abs"] > args.max_vertex_error:
         raise RuntimeError(
-            "GPU 最终顶点误差超出合同："
+            "GPU vertex :"
             f"{comparison['vertices_max_abs']:.9g} > {args.max_vertex_error:.9g}"
         )
     gpu_seconds = float(result.timings["total_seconds"])

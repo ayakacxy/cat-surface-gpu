@@ -1,4 +1,4 @@
-"""DARTEL 规则网格 Torch 后端的数值和设备合同测试。"""
+"""CAT-Surface GPU implementation."""
 
 # SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -34,7 +34,7 @@ from cat_surface_gpu.dartel_grid import _bound_indices
 
 
 def _bound_scalar(i: int, j: int, spec: GridSpec) -> tuple[int, int]:
-    """提供与 CAT C 实现独立的标量边界参考。"""
+    """Bound scalar."""
 
     x = i % spec.nx
     if spec.ny == 1:
@@ -71,9 +71,15 @@ def _composition_numpy(a, b, spec):
             yy = float(a[1, y, x]) - 1.0
             for component, period in ((0, spec.nx), (1, spec.ny)):
                 corners = list(_corners_numpy(b[component] - 1.0, xx, yy, spec))
-                corners[1] -= math.floor((corners[1] - corners[0]) / period + 0.5) * period
-                corners[2] -= math.floor((corners[2] - corners[0]) / period + 0.5) * period
-                corners[3] -= math.floor((corners[3] - corners[0]) / period + 0.5) * period
+                corners[1] -= (
+                    math.floor((corners[1] - corners[0]) / period + 0.5) * period
+                )
+                corners[2] -= (
+                    math.floor((corners[2] - corners[0]) / period + 0.5) * period
+                )
+                corners[3] -= (
+                    math.floor((corners[3] - corners[0]) / period + 0.5) * period
+                )
                 result[component, y, x] = _bilinear_numpy(corners) + 1.0
     return result
 
@@ -102,16 +108,18 @@ def test_composition_matches_numpy_reference():
 
 
 def test_shared_index_composition_matches_reference_path():
-    """共享索引优化必须与逐分量 reference 保持数值等价。"""
+    """Test shared index composition matches reference path."""
 
     torch.manual_seed(17)
     spec = GridSpec(nx=9, ny=7)
-    a = make_identity_map(spec, device="cpu") + torch.randn(
-        (2, spec.ny, spec.nx), dtype=torch.float64
-    ) * 1.7
-    b = make_identity_map(spec, device="cpu") + torch.randn(
-        (2, spec.ny, spec.nx), dtype=torch.float64
-    ) * 0.8
+    a = (
+        make_identity_map(spec, device="cpu")
+        + torch.randn((2, spec.ny, spec.nx), dtype=torch.float64) * 1.7
+    )
+    b = (
+        make_identity_map(spec, device="cpu")
+        + torch.randn((2, spec.ny, spec.nx), dtype=torch.float64) * 0.8
+    )
     ja = torch.randn((4, spec.ny, spec.nx), dtype=torch.float64)
     jb = torch.randn((4, spec.ny, spec.nx), dtype=torch.float64)
     ja[[0, 3]] += 1.0
@@ -147,7 +155,7 @@ def test_shared_index_composition_matches_reference_path():
 
 
 def test_multichannel_squaring_sampling_matches_reference_path():
-    """squaring 的五通道共享采样必须保持 reference 结果。"""
+    """Test multichannel squaring sampling matches reference path."""
 
     torch.manual_seed(29)
     spec = GridSpec(nx=9, ny=7)
@@ -221,7 +229,8 @@ def test_jacobian_composition_matches_finite_difference_for_small_flow():
     displacement = torch.stack(
         (
             0.03 * torch.sin(2.0 * math.pi * x / spec.nx).expand(spec.ny, spec.nx),
-            0.02 * torch.cos(2.0 * math.pi * y / (2.0 * spec.ny)).expand(spec.ny, spec.nx),
+            0.02
+            * torch.cos(2.0 * math.pi * y / (2.0 * spec.ny)).expand(spec.ny, spec.nx),
         ),
         dim=0,
     )
@@ -234,10 +243,14 @@ def test_jacobian_composition_matches_finite_difference_for_small_flow():
             xp, yp = _bound_scalar(column + 1, row, spec)
             x0, y0 = _bound_scalar(column, row - 1, spec)
             x1, y1 = _bound_scalar(column, row + 1, spec)
-            expected[0, row, column] = (values[0, yp, xp] - values[0, ym, xm]) / 2.0 + 1.0
+            expected[0, row, column] = (
+                values[0, yp, xp] - values[0, ym, xm]
+            ) / 2.0 + 1.0
             expected[1, row, column] = (values[1, yp, xp] - values[1, ym, xm]) / 2.0
             expected[2, row, column] = (values[0, y1, x1] - values[0, y0, x0]) / 2.0
-            expected[3, row, column] = (values[1, y1, x1] - values[1, y0, x0]) / 2.0 + 1.0
+            expected[3, row, column] = (
+                values[1, y1, x1] - values[1, y0, x0]
+            ) / 2.0 + 1.0
     np.testing.assert_allclose(analytic.numpy(), expected, rtol=1e-12, atol=1e-12)
 
 
@@ -289,14 +302,16 @@ def test_c_layout_round_trip():
 
 def test_explicit_cuda_does_not_fallback_when_unavailable():
     if torch.cuda.is_available():
-        pytest.skip("当前机器有 CUDA，跳过不可用设备分支")
+        pytest.skip(
+            "CUDA is available; the unavailable-device contract is not applicable"
+        )
     with pytest.raises(DeviceUnavailable):
         resolve_device("cuda")
 
 
 def test_visible_cuda_matches_cpu_with_explicit_tolerance():
     if not torch.cuda.is_available():
-        pytest.skip("当前执行环境没有可见 CUDA")
+        pytest.skip("CUDA is required for this test")
     spec = GridSpec(nx=32, ny=24)
     identity = make_identity_map(spec, device="cpu")
     flow = torch.stack(
@@ -328,9 +343,9 @@ def test_visible_cuda_matches_cpu_with_explicit_tolerance():
 
 def test_visible_triton_relax_and_fmg_match_torch_reference():
     if not torch.cuda.is_available():
-        pytest.skip("当前执行环境没有可见 CUDA")
+        pytest.skip("CUDA is required for this test")
     if not dartel_triton.available():
-        pytest.skip("当前 Python 环境没有可用 Triton")
+        pytest.skip("Triton is not available")
     torch.manual_seed(19)
     spec = GridSpec(nx=32, ny=24)
     hessian = torch.rand((3, spec.ny, spec.nx), dtype=torch.float64)

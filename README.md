@@ -6,11 +6,13 @@ GPU-accelerated `CAT_Surf2Sphere` and `CAT_SurfWarp`-compatible surface registra
 
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/ayakacxy/cat-surface-gpu?display_name=tag&sort=semver)](https://github.com/ayakacxy/cat-surface-gpu/releases/latest)
+[![CI](https://github.com/ayakacxy/cat-surface-gpu/actions/workflows/ci.yml/badge.svg)](https://github.com/ayakacxy/cat-surface-gpu/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/ayakacxy/cat-surface-gpu/actions/workflows/codeql.yml/badge.svg)](https://github.com/ayakacxy/cat-surface-gpu/actions/workflows/codeql.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB.svg?logo=python&logoColor=white)](pyproject.toml)
 [![CUDA 12.6 tested](https://img.shields.io/badge/CUDA-12.6-76B900.svg?logo=nvidia&logoColor=white)](BENCHMARKS.md)
 [![Linux x86-64](https://img.shields.io/badge/platform-Linux%20x86--64-lightgrey.svg)](bin/linux-x86_64)
 
-[简体中文](README.zh-CN.md) · [Benchmarks](BENCHMARKS.md) · [Upstream credits](THIRD_PARTY_NOTICES.md)
+[简体中文](README.zh-CN.md) · [Benchmarks](BENCHMARKS.md) · [Build from source](BUILDING.md) · [Upstream credits](THIRD_PARTY_NOTICES.md)
 
 ⚡ **GPU-accelerated** · 🧠 **Surface registration** · 🧪 **Reference-checked** · 📦 **Ready-to-run binaries**
 
@@ -71,7 +73,7 @@ Install the CUDA 12.6 build used for the reported benchmarks, then install this 
 ```bash
 python -m pip install torch==2.6.0 \
   --index-url https://download.pytorch.org/whl/cu126
-python -m pip install -e '.[cuda,test]'
+python -m pip install '.[cuda,test]'
 ```
 
 Verify the environment:
@@ -99,8 +101,7 @@ CPU-only test collection is supported, but CUDA tests are skipped when no GPU is
 The optimized path uses the bundled upstream CPU reference for the first five stages and runs the 4,999 area-smoothing sweeps on CUDA. No iteration is removed.
 
 ```bash
-python tools/run_cat_surf2sphere_gpu.py \
-  --reference-cli bin/linux-x86_64/CAT_Surf2Sphere \
+cat-surf2sphere-gpu \
   --input-surface /path/to/coarse.white.gii \
   --output-surface /path/to/sphere.gii \
   --stop-at 10 \
@@ -134,16 +135,13 @@ python tools/benchmark_cat_surf2sphere_gpu.py \
 The full registration runner includes input/output, initial rotation, DARTEL, `-avg`, and GIFTI writing in its reported wall time.
 
 ```bash
-python tools/run_cat_surface_gpu_pipeline.py \
+cat-surfwarp-gpu \
   --source-surface /path/to/white.gii \
   --source-sphere /path/to/sphere.gii \
   --target-surface /path/to/template.white.gii \
   --target-sphere /path/to/template.sphere.gii \
   --output /path/to/sphere.reg.gii \
-  --rotation-depth-probe bin/linux-x86_64/cat_surface_rotation_depth \
   --rotation-feature-backend cuda-official-depth \
-  --stencil-builder bin/linux-x86_64/cat_surface_stencil_builder \
-  --rotated-stencil-builder bin/linux-x86_64/cat_surface_stencil_builder \
   --stencil-threads 8 \
   --device cuda \
   --kernel triton \
@@ -166,7 +164,7 @@ Use `tools/benchmark_cat_surface_end_to_end.py` to compare this path against the
 | `cat_surface_rotation_depth` | Exports upstream-compatible raw depth features for initial rotation |
 | `cat_surface_stencil_builder` | Builds deterministic surface-resampling stencils; uses 8 CPU workers by default and accepts `--threads N` |
 
-All four files are stripped x86-64 ELF executables built from [CAT-Surface commit `628b6851`](https://github.com/ChristianGaser/CAT-Surface/tree/628b6851d8638f3ab773cd25c0ec406d0ec61ede) with `-O2 -fPIC`. They link only to glibc, libm, and pthread at runtime. Checksums are in [`bin/linux-x86_64/SHA256SUMS`](bin/linux-x86_64/SHA256SUMS). Source files for the two helpers are available in [`tools/cat_surface_c/`](tools/cat_surface_c/).
+All four files are stripped x86-64 ELF executables built from [CAT-Surface commit `628b6851`](https://github.com/ChristianGaser/CAT-Surface/tree/628b6851d8638f3ab773cd25c0ec406d0ec61ede) with `-O2 -fPIC`. They link only to glibc, libm, and pthread at runtime. Checksums are in [`bin/linux-x86_64/SHA256SUMS`](bin/linux-x86_64/SHA256SUMS). Source files for the two helpers are available in [`native/`](native/), and the complete build procedure is in [BUILDING.md](BUILDING.md).
 
 The Python runners expose the same setting as `--stencil-threads`. The default of 8 avoids excessive CPU oversubscription when source/target work and both hemispheres run concurrently; high-core-count systems can select 16 or 32 explicitly.
 
@@ -189,11 +187,31 @@ from cat_surface_gpu import run_cat_surf2sphere_gpu, run_cat_surface_gpu_pipelin
 ```text
 src/cat_surface_gpu/          Public API, GPU kernels, and registration implementation
 tools/                        CLI runners, benchmarks, and A/B utilities
-tools/cat_surface_c/          Source for CAT-Surface-compatible helper programs
+native/                       Source for the two bundled helper programs
+scripts/                      Build and release-verification automation
 tests/                        CPU contracts and CUDA tests
 bin/linux-x86_64/             Bundled reference/helper executables
 BENCHMARKS.md                 Detailed performance and accuracy report
 ```
+
+## 🧪 Synthetic smoke fixture
+
+The repository does not distribute anatomical or subject data. Generate deterministic, non-anatomical GIFTI files for installation and I/O smoke tests:
+
+```bash
+python tools/generate_synthetic_fixture.py --output /tmp/cat-surface-gpu-smoke
+python scripts/verify_release.py
+```
+
+This fixture verifies packaging and structural contracts; it is not a substitute for the real-input numerical and performance A/B in [BENCHMARKS.md](BENCHMARKS.md).
+
+## 🛠️ Development and release integrity
+
+- [BUILDING.md](BUILDING.md) documents the pinned upstream source and native rebuild.
+- [REPRODUCIBILITY.md](REPRODUCIBILITY.md) defines provenance and validation layers.
+- [CONTRIBUTING.md](CONTRIBUTING.md) defines the scientific contract for changes.
+- [SECURITY.md](SECURITY.md) explains private vulnerability reporting and medical-data safety.
+- [CHANGELOG.md](CHANGELOG.md) records release-visible changes.
 
 ## 🙏 Credits and license
 

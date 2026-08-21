@@ -1,4 +1,4 @@
-"""CAT 初始旋转的输入读取、索引构建和 seed/精化编排。"""
+"""High-level initial-rotation pipeline over fixed native helper outputs."""
 
 # SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -21,40 +21,34 @@ from .surface_stencil import SurfaceStencil
 
 
 def read_rotation_values(path: str | Path) -> tuple[np.ndarray, np.ndarray]:
-    """读取官方 probe 导出的 source/target 双精度旋转特征。"""
+    """Read rotation values."""
 
     path = Path(path)
     with path.open("rb") as stream:
         header = np.fromfile(stream, dtype="<i4", count=2)
         if header.size != 2:
-            raise ValueError(f"旋转特征文件头不完整：{path}")
+            raise ValueError(f"Rotation feature file : {path}")
         source = np.fromfile(stream, dtype="<f8", count=int(header[0]))
         target = np.fromfile(stream, dtype="<f8", count=int(header[1]))
         trailing = stream.read(1)
     if source.size != int(header[0]) or target.size != int(header[1]):
-        raise ValueError(f"旋转特征文件长度不匹配：{path}")
+        raise ValueError(f"Rotation feature file length : {path}")
     if trailing:
-        raise ValueError(f"旋转特征文件包含未消费尾部：{path}")
+        raise ValueError(f"Rotation feature file : {path}")
     return np.ascontiguousarray(source), np.ascontiguousarray(target)
 
 
 def read_rotation_points(path: str | Path) -> np.ndarray:
-    """读取官方 map probe 导出的粗网格 source 点。
-
-    官方 probe 的点类型会随编译配置成为单精度或双精度；两种格式的
-    文件头相同，均为 ``int32`` 点数后紧跟 ``x/y/z`` 交错坐标。读取时
-    只在文件长度明确匹配时选择对应精度，避免把双精度 payload 错读成
-    单精度并把尾部误报成损坏。
-    """
+    """Read rotation points."""
 
     path = Path(path)
     with path.open("rb") as stream:
         header = np.fromfile(stream, dtype="<i4", count=1)
         if header.size != 1:
-            raise ValueError(f"旋转点文件头不完整：{path}")
+            raise ValueError(f"Rotation file : {path}")
         n_points = int(header[0])
         if n_points < 0:
-            raise ValueError(f"旋转点文件点数非法：{path}")
+            raise ValueError(f"Rotation file : {path}")
         payload = stream.read()
 
     n_values = 3 * n_points
@@ -66,15 +60,15 @@ def read_rotation_points(path: str | Path) -> np.ndarray:
         points = np.frombuffer(payload, dtype="<f8", count=n_values)
     else:
         raise ValueError(
-            f"旋转点文件长度不匹配：{path}，实际 {len(payload)} 字节，"
-            f"期望 {expected_float32_bytes} 或 {expected_float64_bytes} 字节"
+            f"Rotation file length : {path}, {len(payload)} ,"
+            f"{expected_float32_bytes} or {expected_float64_bytes}"
         )
     return np.ascontiguousarray(points.reshape(n_points, 3))
 
 
 @dataclass
 class RotationPipeline:
-    """保存一次目标球面索引和设备端旋转搜索入口。"""
+    """Combine a reusable target index with CAT-compatible rotation search."""
 
     index_cpu: RotationGridIndex
     index: RotationGridIndexDevice
@@ -91,7 +85,7 @@ class RotationPipeline:
         geometry_dtype: torch.dtype = torch.float32,
         compressed_candidate_table: bool = True,
     ) -> "RotationPipeline":
-        """从目标粗球面 stencil 建立一次可复用的旋转 pipeline。"""
+        """Build and upload a rotation index from a surface stencil."""
 
         target_device = resolve_device(device)
         index_cpu = RotationGridIndex.from_stencil(
@@ -117,7 +111,7 @@ class RotationPipeline:
         candidate_table_dtype: torch.dtype = torch.int32,
         geometry_dtype: torch.dtype = torch.float32,
     ) -> "RotationPipeline":
-        """从已经在 CPU 构建好的索引完成设备上传。"""
+        """From index cpu."""
 
         target_device = resolve_device(device)
         index = index_cpu.to(
@@ -129,7 +123,7 @@ class RotationPipeline:
 
     @property
     def device(self) -> torch.device:
-        """返回旋转 pipeline 的设备。"""
+        """Device."""
 
         return self.index.device
 
@@ -139,7 +133,7 @@ class RotationPipeline:
         source_values: np.ndarray | torch.Tensor,
         target_values: np.ndarray | torch.Tensor,
     ) -> RotationCostInputs:
-        """把一次旋转搜索的三组输入固定在 pipeline 设备。"""
+        """Validate and upload source points and source/target features once."""
 
         return self.index.prepare_cost_inputs(
             source_points, source_values, target_values
@@ -157,11 +151,9 @@ class RotationPipeline:
         tol: float = 1.0e-4,
         simplex_step: float = 0.1,
     ) -> RotationSearchResult:
-        """执行官方 seed 和可选 C 顺序 Nelder–Mead。"""
+        """Run the 46-seed search and optional CAT-ordered refinement."""
 
-        inputs = self.prepare_inputs(
-            source_points, source_values, target_values
-        )
+        inputs = self.prepare_inputs(source_points, source_values, target_values)
         return self.index.search_rotation_prepared(
             inputs,
             point_chunk=point_chunk,
@@ -189,7 +181,7 @@ def run_rotation_pipeline(
     tol: float = 1.0e-4,
     simplex_step: float = 0.1,
 ) -> RotationSearchResult:
-    """从固定 C probe 输入完成一次完整的初始旋转搜索。"""
+    """Run rotation pipeline."""
 
     pipeline = RotationPipeline.from_stencil(
         target_stencil,
@@ -227,7 +219,7 @@ def run_rotation_pipeline_from_files(
     tol: float = 1.0e-4,
     simplex_step: float = 0.1,
 ) -> RotationSearchResult:
-    """读取官方 probe 文件并完成一次初始旋转搜索。"""
+    """Run rotation pipeline from files."""
 
     source_points = read_rotation_points(source_points_path)
     source_values, target_values = read_rotation_values(rotation_values_path)

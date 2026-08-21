@@ -1,4 +1,4 @@
-"""新版 CAT-Surface 的可选规则网格后端。"""
+"""Public API for exact-algorithm CAT-Surface GPU acceleration."""
 
 # SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -66,6 +66,7 @@ from .surf2sphere import (
     run_surf2sphere_preprocess_cuda,
     surface_area,
 )
+from .resources import bundled_binary, bundled_binary_names
 
 __all__ = [
     "DeviceUnavailable",
@@ -121,4 +122,6 @@ __all__ = [
     "run_cat_surf2sphere_gpu",
     "run_surf2sphere_preprocess_cuda",
     "surface_area",
+    "bundled_binary",
+    "bundled_binary_names",
 ]

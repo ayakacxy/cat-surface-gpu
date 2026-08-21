@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""测量 CAT 曲面 stencil 上传和设备常驻 DARTEL 的端到端耗时。"""
+"""CAT-Surface GPU implementation."""
 
 from __future__ import annotations
 
@@ -23,18 +23,20 @@ from cat_surface_gpu.dartel_grid import resolve_device
 
 
 def _synchronize(device: torch.device) -> None:
-    """在 CUDA 计时边界显式等待设备完成。"""
+    """Synchronize."""
 
     if device.type == "cuda":
         torch.cuda.synchronize(device)
 
 
 def _load_points(path: Path) -> np.ndarray:
-    """读取单对象 GIFTI 的第一组三维点。"""
+    """Load points."""
 
     values = np.asarray(nib.load(str(path)).darrays[0].data, dtype=np.float32)
     if values.ndim != 2 or values.shape[1] != 3:
-        raise ValueError(f"曲面必须是 [points, 3]，得到 {values.shape}：{path}")
+        raise ValueError(
+            f"Surface must have shape [points, 3], got {values.shape}: {path}"
+        )
     return values
 
 
@@ -47,7 +49,7 @@ def _solve(
     device: torch.device,
     cuda_graph: bool = False,
 ):
-    """执行一次不含输入上传的设备常驻 solve。"""
+    """Solve."""
 
     return solve_dartel_from_surfaces(
         source,
@@ -72,7 +74,7 @@ def _solve(
 
 
 def main() -> None:
-    """运行曲面 GPU A/B 并输出机器可读的 JSON。"""
+    """Main."""
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--source-surface", type=Path, required=True)
@@ -83,7 +85,9 @@ def main() -> None:
     parser.add_argument("--kernel", default="auto")
     parser.add_argument("--steps", type=int, default=3)
     parser.add_argument("--curvtypes", type=int, nargs="+", default=[5, 5, 2])
-    parser.add_argument("--fwhm", type=float, nargs="+", default=[5.0, 5.0 / 3.0, 5.0 / 9.0])
+    parser.add_argument(
+        "--fwhm", type=float, nargs="+", default=[5.0, 5.0 / 3.0, 5.0 / 9.0]
+    )
     parser.add_argument("--loop", type=int, default=6)
     parser.add_argument("--cycles", type=int, default=3)
     parser.add_argument("--nit", type=int, default=3)
@@ -93,27 +97,27 @@ def main() -> None:
         "--parallel-sides",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="CUDA 下重叠 source/target 曲面阶段；默认开启",
+        help="CUDA source/target surface : default",
     )
     parser.add_argument(
         "--optimized-dartel",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="启用 DARTEL 多通道共享采样；默认开启",
+        help="DARTEL : default",
     )
     parser.add_argument(
         "--cuda-graph",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="重复 solve 时启用固定 shape 的 CUDA Graph；默认开启",
+        help="Solve shape CUDA Graph: default",
     )
     parser.add_argument("--warmup", type=int, default=1)
     parser.add_argument("--repeat", type=int, default=3)
     args = parser.parse_args()
     if args.steps < 1:
-        raise ValueError("steps 必须为正数")
+        raise ValueError("steps must be positive")
     if len(args.curvtypes) < args.steps or len(args.fwhm) < args.steps:
-        raise ValueError("curvtypes 和 fwhm 必须覆盖所有 steps")
+        raise ValueError("curvtypes and fwhm must contain at least 'steps' entries")
 
     device = resolve_device(args.device)
     source_np = _load_points(args.source_surface)
@@ -186,9 +190,7 @@ def main() -> None:
     payload = {
         "device": str(device),
         "device_name": (
-            torch.cuda.get_device_name(device)
-            if device.type == "cuda"
-            else "CPU"
+            torch.cuda.get_device_name(device) if device.type == "cuda" else "CPU"
         ),
         "torch": torch.__version__,
         "source_shape": list(source.shape),

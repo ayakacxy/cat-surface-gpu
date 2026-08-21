@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""按 SimNIBS 默认粗化参数测量双侧 CAT 球面注册 GPU 链路。"""
+"""CAT-Surface GPU implementation."""
 
 from __future__ import annotations
 
@@ -9,7 +9,6 @@ import argparse
 import json
 from pathlib import Path
 import subprocess
-import sys
 import time
 
 import numpy as np
@@ -24,7 +23,7 @@ def _run_parallel(
     root: Path,
     pythonpath: str,
 ) -> tuple[float, list[int]]:
-    """并行运行两个半球进程，并保留各自 stdout/stderr。"""
+    """Run parallel."""
 
     handles = []
     processes = []
@@ -36,9 +35,7 @@ def _run_parallel(
             handles.append(handle)
             environment = dict(**__import__("os").environ)
             environment["PYTHONPATH"] = (
-                str(root / "src")
-                + ":"
-                + environment.get("PYTHONPATH", "")
+                str(root / "src") + ":" + environment.get("PYTHONPATH", "")
             )
             processes.append(
                 subprocess.Popen(
@@ -60,7 +57,7 @@ def _upsample(
     simnibs_python: Path,
     pairs: list[tuple[Path, Path]],
 ) -> float:
-    """复用 SimNIBS 的拓扑上采样逻辑。"""
+    """Upsample."""
 
     encoded = json.dumps(
         [(str(source), str(destination)) for source, destination in pairs]
@@ -85,30 +82,28 @@ def _upsample(
     )
     if completed.returncode != 0:
         raise RuntimeError(
-            "SimNIBS sphere upsample 失败:\n"
-            + completed.stderr[-4000:]
+            "SimNIBS sphere upsample failed:\n" + completed.stderr[-4000:]
         )
     return time.perf_counter() - start
 
 
 def _compare_mesh(reference: Path, candidate: Path) -> dict[str, object]:
-    """比较最终 GIFTI 的拓扑和逐元素坐标误差。"""
+    """Compare mesh."""
 
     expected = read_gifti_mesh(reference)
     actual = read_gifti_mesh(candidate)
     if expected.vertices.shape != actual.vertices.shape:
         raise ValueError(
-            f"顶点形状不一致: {expected.vertices.shape} vs {actual.vertices.shape}"
+            f"Vertex shape does not match : {expected.vertices.shape} vs {actual.vertices.shape}"
         )
     if expected.faces.shape != actual.faces.shape:
         raise ValueError(
-            f"面片形状不一致: {expected.faces.shape} vs {actual.faces.shape}"
+            f"Face shape does not match : {expected.faces.shape} vs {actual.faces.shape}"
         )
     if not np.array_equal(expected.faces, actual.faces):
-        raise ValueError("最终 GIFTI 面片数组不一致")
+        raise ValueError("GIFTI face array does not match")
     difference = np.abs(
-        expected.vertices.astype(np.float64)
-        - actual.vertices.astype(np.float64)
+        expected.vertices.astype(np.float64) - actual.vertices.astype(np.float64)
     )
     return {
         "faces_exact": True,
@@ -119,7 +114,7 @@ def _compare_mesh(reference: Path, candidate: Path) -> dict[str, object]:
 
 
 def main() -> int:
-    """执行默认双侧 CAT_Surf2Sphere + CAT_WarpSurf GPU 闭环。"""
+    """Main."""
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--project-root", type=Path, default=Path(__file__).parents[1])
@@ -138,7 +133,7 @@ def main() -> int:
         "--stencil-threads",
         type=int,
         default=8,
-        help="每个 stencil helper 的 CPU worker 数；默认 8",
+        help="Each stencil helper CPU worker : default 8",
     )
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--areal-block-size", type=int, default=8192)
@@ -146,13 +141,13 @@ def main() -> int:
         "--areal-schedule",
         choices=("ordered", "color"),
         default="ordered",
-        help="面积平滑调度；ordered 保持官方顶点依赖顺序",
+        help=": ordered upstream vertex",
     )
     parser.add_argument(
         "--areal-arithmetic",
         choices=("cat", "fp32"),
         default="cat",
-        help="面积平滑算术；cat 使用官方 float 存储/double 累加边界",
+        help=": cat use upstream float /double",
     )
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--lh-cpu-reference", type=Path)
@@ -183,13 +178,9 @@ def main() -> int:
     )
 
     coarse_outputs = {
-        hemi: output_dir / f"{hemi}.sphere.coarse.gii"
-        for hemi, *_ in specs
+        hemi: output_dir / f"{hemi}.sphere.coarse.gii" for hemi, *_ in specs
     }
-    full_outputs = {
-        hemi: output_dir / f"{hemi}.sphere.gii"
-        for hemi, *_ in specs
-    }
+    full_outputs = {hemi: output_dir / f"{hemi}.sphere.gii" for hemi, *_ in specs}
     sphere_commands = []
     sphere_logs = []
     for hemi, coarse, _source, _target, _target_sphere in specs:
@@ -230,7 +221,7 @@ def main() -> int:
         pythonpath=str(root / "src"),
     )
     if any(sphere_codes):
-        raise RuntimeError(f"CAT_Surf2Sphere 双侧失败: {sphere_codes}")
+        raise RuntimeError(f"CAT_Surf2Sphere failed: {sphere_codes}")
 
     upsample_wall = _upsample(
         args.simnibs_python,
@@ -292,7 +283,7 @@ def main() -> int:
         pythonpath=str(root / "src"),
     )
     if any(warp_codes):
-        raise RuntimeError(f"CAT_WarpSurf 双侧失败: {warp_codes}")
+        raise RuntimeError(f"CAT_WarpSurf failed: {warp_codes}")
 
     comparisons = None
     passed = None

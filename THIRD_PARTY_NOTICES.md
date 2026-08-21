@@ -13,7 +13,7 @@ The validated source baseline is commit [`628b6851d8638f3ab773cd25c0ec406d0ec61e
 
 CAT-Surface original code is available under GPL-2.0-or-later or a separate commercial license from its copyright holder. The copied upstream license notice is available at [`upstream/CAT-Surface-LICENSE.txt`](upstream/CAT-Surface-LICENSE.txt).
 
-The binaries under `bin/linux-x86_64/` were built from the exact commit above with `-O2 -fPIC` and stripped for distribution. The corresponding upstream source is available through the linked commit, and the source for repository-specific helper programs is included under `tools/cat_surface_c/`.
+The binaries under `bin/linux-x86_64/` were built from the exact commit above with `-O2 -fPIC` and stripped for distribution. The corresponding upstream source is available through the linked commit and the release source attachment. Source for repository-specific helper programs is included under `native/`; the pinned revision and complete build procedure are recorded in `UPSTREAM.lock` and `BUILDING.md`.
 
 ## SimNIBS
 

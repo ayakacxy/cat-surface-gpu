@@ -1,0 +1,26 @@
+name: Performance report
+description: Report a regression or submit a reproducible benchmark.
+title: "[Performance]: "
+labels: [performance]
+body:
+  - type: textarea
+    id: hardware
+    attributes:
+      label: Hardware and software
+      description: GPU, CPU, RAM, driver, CUDA, Python, PyTorch, Triton, commit, and compiler.
+    validations:
+      required: true
+  - type: textarea
+    id: workload
+    attributes:
+      label: Workload and parameters
+      description: Shapes, precision, threads, steps, runs, warm-up, synchronization, and timing boundary.
+    validations:
+      required: true
+  - type: textarea
+    id: results
+    attributes:
+      label: Results and numerical error
+      description: CPU/GPU wall time, repetitions, faces equality, and max/mean/p99 vertex errors.
+    validations:
+      required: true

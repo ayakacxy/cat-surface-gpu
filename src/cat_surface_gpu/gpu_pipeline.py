@@ -1,4 +1,4 @@
-"""把 CAT-SurfWarp 的真实 GIFTI 数据流接到设备常驻 GPU 后端。"""
+"""End-to-end GIFTI pipeline for CAT_SurfWarp-compatible GPU registration."""
 
 # SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -31,7 +31,7 @@ from .surface_warp import (
 
 @dataclass(frozen=True)
 class GiftiMesh:
-    """保存单个 GIFTI 多边形对象的顶点和三角形。"""
+    """Store one GIFTI surface's vertices, faces, and source path."""
 
     vertices: np.ndarray
     faces: np.ndarray
@@ -39,7 +39,7 @@ class GiftiMesh:
 
 @dataclass(frozen=True)
 class CatSurfaceGpuResult:
-    """保存一次真实 CAT 曲面 GPU 流程的结果和阶段计时。"""
+    """Store final mesh data, rotation diagnostics, timings, and output path."""
 
     vertices: np.ndarray
     faces: np.ndarray
@@ -50,19 +50,21 @@ class CatSurfaceGpuResult:
 
 
 def read_gifti_mesh(path: str | Path) -> GiftiMesh:
-    """读取单对象 GIFTI 的第一组三维顶点和三角形面片。"""
+    """Read the first point-set and triangle arrays from a GIFTI surface."""
 
     import nibabel as nib
 
     image = nib.load(str(path))
     if len(image.darrays) < 2:
-        raise ValueError(f"GIFTI 至少需要顶点和面片两个数据数组：{path}")
+        raise ValueError(f"GIFTI file must contain vertex and face arrays: {path}")
     vertices = np.asarray(image.darrays[0].data)
     faces = np.asarray(image.darrays[1].data)
     if vertices.ndim != 2 or vertices.shape[1] != 3:
-        raise ValueError(f"顶点数组必须为 [n,3]：{path} -> {vertices.shape}")
+        raise ValueError(
+            f"Vertex array must have shape [n, 3]: {path} -> {vertices.shape}"
+        )
     if faces.ndim != 2 or faces.shape[1] != 3:
-        raise ValueError(f"面片数组必须为 [m,3]：{path} -> {faces.shape}")
+        raise ValueError(f"Face array must have shape [m, 3]: {path} -> {faces.shape}")
     return GiftiMesh(
         vertices=np.ascontiguousarray(vertices, dtype=np.float32),
         faces=np.ascontiguousarray(faces, dtype=np.int32),
@@ -75,7 +77,7 @@ def write_gifti_mesh(
     *,
     reference_path: str | Path | None = None,
 ) -> None:
-    """写出顶点/面片数组，并沿用参考 GIFTI 的 intent。"""
+    """Write vertices and faces while preserving reference GIFTI intents."""
 
     import nibabel as nib
     from nibabel.gifti import GiftiDataArray, GiftiImage
@@ -109,14 +111,14 @@ def write_gifti_mesh(
 
 
 def _synchronize(device: torch.device) -> None:
-    """在 GPU 阶段边界显式等待 CUDA 完成。"""
+    """Synchronize CUDA at an explicit stage boundary."""
 
     if device.type == "cuda":
         torch.cuda.synchronize(device)
 
 
 def _resolve_dartel_dtype(value: str | torch.dtype) -> torch.dtype:
-    """解析显式 DARTEL 数值精度，不启用隐式 autocast。"""
+    """Resolve explicit FP32/FP64 DARTEL precision without autocast."""
 
     if isinstance(value, torch.dtype):
         resolved = value
@@ -132,10 +134,10 @@ def _resolve_dartel_dtype(value: str | torch.dtype) -> torch.dtype:
             resolved = mapping[normalized]
         except KeyError as error:
             raise ValueError(
-                "dartel_dtype 必须为 float32/fp32 或 float64/fp64"
+                "dartel_dtype must be float32/fp32 or float64/fp64"
             ) from error
     if resolved not in {torch.float32, torch.float64}:
-        raise ValueError("dartel_dtype 必须为 torch.float32 或 torch.float64")
+        raise ValueError("dartel_dtype must be torch.float32 or torch.float64")
     return resolved
 
 
@@ -145,7 +147,7 @@ def _run_checked(
     *,
     environment: dict[str, str] | None = None,
 ) -> None:
-    """运行一个外部官方辅助程序，失败时保留 stderr 并立即报错。"""
+    """Run an external helper and preserve diagnostic output on failure."""
 
     completed = subprocess.run(
         [str(item) for item in command],
@@ -158,7 +160,7 @@ def _run_checked(
         stderr = completed.stderr.strip()[-2000:]
         stdout = completed.stdout.strip()[-1000:]
         raise RuntimeError(
-            f"{label}失败，返回码 {completed.returncode}\n"
+            f"{label} failed with exit code {completed.returncode}\n"
             f"stdout:\n{stdout}\n"
             f"stderr:\n{stderr}"
         )
@@ -174,18 +176,12 @@ def _prepare_rotation_values(
     *,
     raw_depth: bool = False,
 ) -> Path:
-    """调用官方特征 helper，并检查其二进制输出已经完整落盘。
-
-    ``raw_depth=True`` 只要求 helper 导出未经过最后 50 mm 平滑的
-    depth-potential；该显式实验路径由 GPU 接管最后的平滑和归一化。
-    """
+    """Prepare rotation values."""
 
     environment = None
     if raw_depth:
         environment = os.environ.copy()
         environment["CAT_SURFACE_GPU_ROTATION_RAW_DEPTH"] = "1"
-        # 新版 helper 会把同一次 coarse resample/heat-kernel 的坐标写成
-        # sidecar；调用方随后直接上传它，避免 raw depth 模式重复做几何。
         environment["CAT_SURFACE_GPU_ROTATION_RAW_DEPTH_GEOMETRY"] = "1"
 
     _run_checked(
@@ -197,11 +193,13 @@ def _prepare_rotation_values(
             str(target_sphere),
             str(output_path),
         ],
-        "初始旋转特征生成",
+        "Rotation feature",
         environment=environment,
     )
     if not output_path.is_file() or output_path.stat().st_size == 0:
-        raise RuntimeError(f"初始旋转特征 helper 没有生成有效文件：{output_path}")
+        raise RuntimeError(
+            f"Rotation feature helper did not produce a valid file: {output_path}"
+        )
     return output_path
 
 
@@ -212,7 +210,7 @@ def _prepare_rotation_geometry(
     heat_fwhm: float,
     output_path: Path,
 ) -> Path:
-    """调用官方 coarse 重采样/heat-kernel probe，导出 GPU 后续所需几何。"""
+    """Prepare rotation geometry."""
 
     _run_checked(
         [
@@ -222,26 +220,28 @@ def _prepare_rotation_geometry(
             str(float(heat_fwhm)),
             str(output_path),
         ],
-        "官方 coarse feature 几何生成",
+        "Upstream coarse feature geometry",
     )
     if not output_path.is_file() or output_path.stat().st_size < 4:
-        raise RuntimeError(f"coarse feature 几何 probe 没有生成有效文件：{output_path}")
+        raise RuntimeError(
+            f"Coarse feature geometry helper did not produce a valid file: {output_path}"
+        )
     return output_path
 
 
 def _read_rotation_geometry(path: str | Path) -> np.ndarray:
-    """读取 heat-kernel probe 写出的 ``count + double[n,3]`` 几何。"""
+    """Read rotation geometry."""
 
     raw = Path(path).read_bytes()
     if len(raw) < 4:
-        raise ValueError(f"coarse feature 几何文件过短：{path}")
+        raise ValueError(f"Coarse feature geometry file is too short: {path}")
     count = int(np.frombuffer(raw, dtype=np.int32, count=1)[0])
     expected = 4 + count * 3 * np.dtype(np.float64).itemsize
     if count <= 0 or len(raw) < expected:
-        raise ValueError(f"coarse feature 几何文件长度不匹配：{path}")
-    points = np.frombuffer(
-        raw, dtype=np.float64, count=count * 3, offset=4
-    ).reshape(count, 3)
+        raise ValueError(f"Coarse feature geometry file has an invalid length: {path}")
+    points = np.frombuffer(raw, dtype=np.float64, count=count * 3, offset=4).reshape(
+        count, 3
+    )
     return np.ascontiguousarray(points, dtype=np.float32)
 
 
@@ -251,20 +251,20 @@ def _average_xz_surfaces(
     *,
     device: torch.device,
 ) -> torch.Tensor:
-    """在 GPU 上执行官方 ``average_xz_surf`` 的逐点加权平均。"""
+    """Average xz surfaces."""
 
     x_value = torch.as_tensor(x_surface, dtype=torch.float64, device=device)
     z_value = torch.as_tensor(z_surface, dtype=torch.float64, device=device)
     if x_value.shape != z_value.shape or x_value.ndim != 2 or x_value.shape[1] != 3:
-        raise ValueError("两个待平均球面的形状必须同为 [points,3]")
+        raise ValueError("Both sphere arrays must have shape [points, 3]")
     phi_x = torch.acos(x_value[:, 0].clamp(-1.0, 1.0)) / torch.pi
     phi_z = torch.acos(z_value[:, 2].clamp(-1.0, 1.0)) / torch.pi
     weight_x = torch.exp(-((2.0 * phi_x - 1.0) ** 2) / 0.1).clamp_min(1e-19)
     weight_z = torch.exp(-((2.0 * phi_z - 1.0) ** 2) / 0.1).clamp_min(1e-19)
     total = weight_x + weight_z
-    averaged = (
-        weight_x[:, None] * x_value + weight_z[:, None] * z_value
-    ) / total[:, None]
+    averaged = (weight_x[:, None] * x_value + weight_z[:, None] * z_value) / total[
+        :, None
+    ]
     averaged = averaged / torch.linalg.vector_norm(
         averaged, dim=-1, keepdim=True
     ).clamp_min(torch.finfo(torch.float64).eps)
@@ -272,13 +272,11 @@ def _average_xz_surfaces(
 
 
 def _normalise_sphere(vertices: np.ndarray) -> np.ndarray:
-    """复现 CAT 读入球面后的质心平移和逐点单位化。"""
+    """Normalise sphere."""
 
-    # CAT 的 Point 是 float：质心累加在 double 中进行，但每个顶点减去
-    # 质心后立即写回 float；不能用一次向量化 double 减法替代这一舍入点。
     value = np.ascontiguousarray(np.asarray(vertices, dtype=np.float32))
     if value.ndim != 2 or value.shape[1] != 3:
-        raise ValueError(f"球面顶点必须是 [n,3]，得到 {value.shape}")
+        raise ValueError(f"Sphere vertices must have shape [n, 3], got {value.shape}")
     centre = np.zeros(3, dtype=np.float64)
     for point in value:
         centre[0] += float(point[0])
@@ -299,7 +297,7 @@ def _normalise_sphere(vertices: np.ndarray) -> np.ndarray:
         z = float(point[2])
         length = math.sqrt(x * x + y * y + z * z)
         if not math.isfinite(length) or length == 0.0:
-            raise ValueError("球面存在无法单位化的顶点")
+            raise ValueError("Sphere contains a vertex that cannot be normalized")
         scale = 1.0 / length
         normalised[index, 0] = np.float32(x * scale)
         normalised[index, 1] = np.float32(y * scale)
@@ -308,11 +306,11 @@ def _normalise_sphere(vertices: np.ndarray) -> np.ndarray:
 
 
 def _rotation_matrix_from_angles(angles: np.ndarray) -> torch.Tensor:
-    """按 CAT ``rotation_to_matrix`` 的数组索引布局构造双精度矩阵。"""
+    """Rotation matrix from angles."""
 
     value = torch.as_tensor(angles, dtype=torch.float64).reshape(-1)
     if value.numel() != 3:
-        raise ValueError("旋转角度必须包含三个元素")
+        raise ValueError("Rotation must contain exactly three angles")
     alpha, beta, gamma = value.unbind()
     zero = torch.zeros((), dtype=torch.float64)
     one = torch.ones((), dtype=torch.float64)
@@ -357,13 +355,10 @@ def _rotation_matrix_from_angles(angles: np.ndarray) -> torch.Tensor:
     )
     intermediate = torch.empty(9, dtype=torch.float64)
     result = torch.empty(9, dtype=torch.float64)
-    # CAT 的 C 实现以 i + 3*j 访问数组；这里保持相同的元素顺序，
-    # 不能替换成常规 row-major 的矩阵乘法。
     for row in range(3):
         for column in range(3):
             intermediate[row + 3 * column] = sum(
-                ry[row + 3 * index] * rx[index + 3 * column]
-                for index in range(3)
+                ry[row + 3 * index] * rx[index + 3 * column] for index in range(3)
             )
     for row in range(3):
         for column in range(3):
@@ -375,7 +370,7 @@ def _rotation_matrix_from_angles(angles: np.ndarray) -> torch.Tensor:
 
 
 def _rotate_vertices(vertices: np.ndarray, angles: np.ndarray) -> np.ndarray:
-    """按官方矩阵方向旋转一组三维顶点，不做额外归一化。"""
+    """Rotate vertices."""
 
     sphere = torch.as_tensor(vertices, dtype=torch.float64)
     matrix = _rotation_matrix_from_angles(angles)
@@ -391,26 +386,26 @@ def _prepare_artifact(
     label: str,
     builder_options: Sequence[str] = (),
 ) -> Path:
-    """使用已有缓存或显式官方辅助程序准备一个 stencil/特征文件。"""
+    """Prepare artifact."""
 
     if provided_path is not None:
         path = Path(provided_path)
         if not path.is_file():
-            raise FileNotFoundError(f"{label}不存在：{path}")
+            raise FileNotFoundError(f"{label} does not exist: {path}")
         return path
     if builder is None:
-        raise ValueError(f"未提供 {label}，也未提供对应构建程序")
+        raise ValueError(f"Neither an existing {label} nor a builder was provided")
     _run_checked(
         [str(builder), str(builder_input), str(output_path), *builder_options],
-        f"{label}构建",
+        f"{label}",
     )
     if not output_path.is_file() or output_path.stat().st_size == 0:
-        raise RuntimeError(f"{label}构建程序没有生成有效文件：{output_path}")
+        raise RuntimeError(f"{label} did not produce a valid file: {output_path}")
     return output_path
 
 
 def _timed_prepare(function, *args, **kwargs):
-    """执行一个可并行的前处理任务并返回结果和自身墙钟。"""
+    """Timed prepare."""
 
     started = time.perf_counter()
     result = function(*args, **kwargs)
@@ -431,7 +426,7 @@ def _warmup_and_prepare_dartel_graph(
     squaring_kernel: str | None,
     optimized: bool,
 ) -> tuple[float, float]:
-    """用 dummy maps 预热并捕获 Graph，返回捕获耗时和总耗时。"""
+    """Warmup and prepare dartel graph."""
 
     started = time.perf_counter()
     warmup = solve_dartel_maps(
@@ -500,8 +495,6 @@ def run_cat_surface_gpu_pipeline(
     nit: int = 3,
     its: int = 3,
     code: int = 1,
-    # 真实左半球上 4096 点一块可显著减少旋转 cost 的 kernel 调度，
-    # 仍保持逐候选、逐点块和 FP64 代价累加顺序；显存不足时可显式降回 512。
     point_chunk: int = 4096,
     rotation_grid_size: int = 128,
     rotation_margin: int = 1,
@@ -515,25 +508,20 @@ def run_cat_surface_gpu_pipeline(
     optimized_dartel: bool = True,
     cuda_graph: bool = True,
 ) -> CatSurfaceGpuResult:
-    """执行完整真实 GIFTI 输入的旋转、DARTEL、avg、warp 和写出闭环。
-
-    ``parallel_sides`` 控制 DARTEL 内 source/target 独立曲面阶段的 CUDA
-    stream 重叠；关闭它可复现顺序 reference A/B。
-    ``optimized_dartel=False`` 可切换到逐通道插值的 DARTEL reference 对照。
-    ``cuda_graph`` 在至少两次正式 solve 时启用固定 shape 的 CUDA Graph；
-    单次 solve 默认不捕获，避免一次性捕获成本超过收益。
-    """
+    """Run initial rotation, FP64 DARTEL, averaging, warp, and GIFTI output."""
 
     if steps < 1 or steps > 3:
-        raise ValueError("steps 必须在 1 到 3 之间")
+        raise ValueError("steps must be between 1 and 3")
     if runs < 1:
-        raise ValueError("runs 必须为正数")
+        raise ValueError("runs must be positive")
     if stencil_threads < 1 or stencil_threads > 256:
-        raise ValueError("stencil_threads 必须在 1 到 256 之间")
+        raise ValueError("stencil_threads must be between 1 and 256")
     if len(curvtypes) < steps or len(fwhm) < steps:
-        raise ValueError("curvtypes 和 fwhm 必须覆盖所有 steps")
+        raise ValueError("curvtypes and fwhm must contain at least 'steps' entries")
     if rotation_max_iter < 1 or rotation_tol < 0.0 or rotation_simplex_step <= 0.0:
-        raise ValueError("rotation_max_iter、rotation_tol 或 rotation_simplex_step 不合法")
+        raise ValueError(
+            "rotation_max_iter, rotation_tol, and rotation_simplex_step must be positive"
+        )
     if rotation_feature_backend not in {
         "auto",
         "cuda",
@@ -542,37 +530,34 @@ def run_cat_surface_gpu_pipeline(
         "official-cpu",
     }:
         raise ValueError(
-            "rotation_feature_backend 必须为 auto、cuda、"
-            "cuda-official-geometry、cuda-official-depth 或 official-cpu"
+            "rotation_feature_backend must be 'auto', 'cuda', "
+            "cuda-official-geometry、cuda-official-depth or official-cpu"
         )
     if rotation_feature_solver not in {"colored-sor", "pcg"}:
-        raise ValueError(
-            "rotation_feature_solver 必须为 colored-sor 或 pcg"
-        )
+        raise ValueError("rotation_feature_solver must be 'colored-sor' or 'pcg'")
     solve_dtype = _resolve_dartel_dtype(dartel_dtype)
     if squaring_kernel not in {None, "auto", "torch", "triton"}:
-        raise ValueError(
-            "squaring_kernel 必须为 None、auto、torch 或 triton"
-        )
+        raise ValueError("squaring_kernel must be None, 'auto', 'torch', or 'triton'")
     if (
-        rotation_feature_backend in {
+        rotation_feature_backend
+        in {
             "cuda-official-geometry",
             "cuda-official-depth",
         }
         and rotation_values_path is not None
     ):
-        raise ValueError(
-            "GPU official hybrid backend 不能同时提供已经生成的 rotation_values"
-        )
+        raise ValueError("GPU official hybrid backend cannot rotation_values")
     if rotation_feature_backend == "auto":
         rotation_feature_backend = (
             "official-cpu" if rotation_values_probe is not None else "cuda"
         )
     if device == "cpu" or str(device) == "cpu":
-        raise ValueError("此入口用于显式 GPU 接入，请使用 cuda 设备")
+        raise ValueError("The explicit GPU pipeline requires a CUDA device")
     target_device = resolve_device(device)
     if target_device.type != "cuda":
-        raise RuntimeError(f"GPU pipeline 未解析到 CUDA 设备：{target_device}")
+        raise RuntimeError(
+            f"CUDA device is unavailable for the GPU pipeline: {target_device}"
+        )
     graph_requested = bool(cuda_graph and (runs + int(avg) >= 3))
 
     total_start = time.perf_counter()
@@ -588,13 +573,10 @@ def run_cat_surface_gpu_pipeline(
     with tempfile.TemporaryDirectory(prefix="cat_surface_gpu_") as temp_name:
         temp_dir = Path(temp_name)
 
-        # 初始 stencil 与旋转特征互相独立，全部放到独立任务中，
-        # 让 CPU 前处理重叠，而不改变任何输入数据或官方数值流程。
         prepare_specs: dict[
             str, tuple[object, tuple[object, ...], dict[str, object]]
         ] = {}
         prepared: dict[str, Path] = {}
-        prepare_started = time.perf_counter()
         if source_stencil_path is None:
             prepare_specs["source_stencil"] = (
                 _timed_prepare,
@@ -655,7 +637,7 @@ def run_cat_surface_gpu_pipeline(
             if rotation_feature_backend == "official-cpu":
                 if rotation_values_probe is None:
                     raise ValueError(
-                        "official-cpu rotation feature 必须提供 rotation_values_probe"
+                        "official-cpu rotation features require rotation_values_probe"
                     )
                 prepare_specs["rotation_values"] = (
                     _timed_prepare,
@@ -677,15 +659,13 @@ def run_cat_surface_gpu_pipeline(
                 if rotation_feature_backend == "cuda-official-geometry":
                     if rotation_geometry_probe is None:
                         raise ValueError(
-                            "cuda-official-geometry 必须提供 rotation_geometry_probe"
+                            "cuda-official-geometry requires rotation_geometry_probe"
                         )
                 elif rotation_depth_probe is None:
                     raise ValueError(
-                        "cuda-official-depth 必须提供 rotation_depth_probe"
+                        "cuda-official-depth requires rotation_depth_probe"
                     )
 
-                # raw depth 的新版 helper 可在一次子进程中同时导出 geometry
-                # sidecar；只有显式提供旧 geometry probe 时才保留双 probe 路径。
                 if (
                     rotation_feature_backend == "cuda-official-geometry"
                     or rotation_geometry_probe is not None
@@ -730,19 +710,19 @@ def run_cat_surface_gpu_pipeline(
                     )
             elif rotation_values_probe is not None:
                 raise ValueError(
-                    "rotation_values_probe 只能与 rotation_feature_backend=official-cpu 一起使用"
+                    "rotation_values_probe is used only with rotation_feature_backend='official-cpu'"
                 )
         else:
             rotation_values_path = Path(rotation_values_path)
             if not rotation_values_path.is_file():
-                raise FileNotFoundError(f"rotation values 不存在：{rotation_values_path}")
+                raise FileNotFoundError(
+                    f"Rotation values file does not exist: {rotation_values_path}"
+                )
             prepared["rotation_values"] = rotation_values_path
 
         prepare_executor = None
         prepare_futures: dict[str, object] = {}
         if prepare_specs:
-            # 先等待两个 stencil；官方 CPU feature helper 仍在独立线程中运行，
-            # 这样可以在它尚未结束时提前上传旋转索引。
             prepare_executor = ThreadPoolExecutor(max_workers=len(prepare_specs))
             prepare_futures = {
                 key: prepare_executor.submit(function, *args, **kwargs)
@@ -756,16 +736,17 @@ def run_cat_surface_gpu_pipeline(
                 timings[f"{key}_seconds"] = float(elapsed)
 
         if "source_stencil" not in prepared or "target_stencil" not in prepared:
-            raise RuntimeError("初始 source/target stencil 没有准备完成")
+            raise RuntimeError("Source/target stencil")
         source_stencil = prepared["source_stencil"]
         target_stencil = prepared["target_stencil"]
         source_stencil_data = SurfaceStencil.from_file(source_stencil)
         target_stencil_data = SurfaceStencil.from_file(target_stencil)
 
         index_ready = False
-        if rotation_feature_backend == "official-cpu" or rotation_values_path is not None:
-            # target stencil 已可用时立即建立旋转索引；官方 CPU feature helper
-            # 仍在另一线程中执行，二者没有数据依赖。
+        if (
+            rotation_feature_backend == "official-cpu"
+            or rotation_values_path is not None
+        ):
             index_start = time.perf_counter()
             rotation_pipeline = RotationPipeline.from_stencil(
                 target_stencil_data,
@@ -777,7 +758,6 @@ def run_cat_surface_gpu_pipeline(
             timings["rotation_index_upload_seconds"] = time.perf_counter() - index_start
             index_ready = True
 
-        # 等待剩余的 rotation-values helper；如果它已结束，这里只做结果收集。
         for key, future in prepare_futures.items():
             if key in prepared:
                 continue
@@ -828,8 +808,7 @@ def run_cat_surface_gpu_pipeline(
                 ):
                     if not geometry_path.is_file() or geometry_path.stat().st_size < 4:
                         raise RuntimeError(
-                            "raw depth helper 未生成 geometry sidecar："
-                            f"{geometry_path}"
+                            f"Raw depth helper geometry sidecar:{geometry_path}"
                         )
             rotation_geometry = (
                 _read_rotation_geometry(prepared["rotation_geometry_source"]),
@@ -952,8 +931,6 @@ def run_cat_surface_gpu_pipeline(
             reference_path=source_sphere_path,
         )
 
-        # 官方 -avg 还会把 template pair 旋转 90 度；目标 stencil
-        # 可以和初始 source stencil 在同一批 CPU 前处理中生成。
         pole_angles = np.asarray((0.0, np.pi / 2.0, 0.0), dtype=np.float64)
         avg_target_surface = _rotate_vertices(target_surface.vertices, pole_angles)
         avg_target_sphere = _rotate_vertices(
@@ -966,8 +943,6 @@ def run_cat_surface_gpu_pipeline(
             reference_path=target_sphere_path,
         )
 
-        # Graph 的 shape/参数已经确定，但实际曲率 maps 尚未生成；用 dummy
-        # maps 在 CPU 旋转后 stencil 构建期间预热并捕获，隐藏一次性成本。
         graph_executor = None
         graph_future = None
         if graph_requested:
@@ -994,7 +969,7 @@ def run_cat_surface_gpu_pipeline(
 
         if rotated_stencil_builder is None:
             raise ValueError(
-                "旋转后 source stencil 必须使用显式 rotated_stencil_builder"
+                "The rotated source stencil requires an explicit rotated_stencil_builder"
             )
         rotated_stencil_started = time.perf_counter()
         rotated_specs: dict[
@@ -1008,7 +983,7 @@ def run_cat_surface_gpu_pipeline(
                     rotated_stencil_builder,
                     rotated_sphere_path,
                     current_stencil_path,
-                    "旋转后 source stencil",
+                    "Rotation source stencil",
                 ),
                 {
                     "builder_options": (
@@ -1069,8 +1044,6 @@ def run_cat_surface_gpu_pipeline(
             timings["cuda_graph_prepare_seconds"] = 0.0
         current_stencil_path = rotated_results["rotated_source_stencil"]
 
-        # GPU 特征路径已经把 target stencil 连同邻接表和颜色组上传到设备；
-        # 正式 DARTEL 直接复用同一份只读对象，避免重复构建和上传。
         if target_feature_stencil is not None:
             target_stencil_device = target_feature_stencil
         else:
@@ -1110,7 +1083,7 @@ def run_cat_surface_gpu_pipeline(
             solve_loop: int,
             use_cuda_graph: bool = False,
         ):
-            """在已经常驻 GPU 的 stencil 上完成一组官方曲率和 DARTEL。"""
+            """Solve one."""
 
             return solve_dartel_from_surfaces(
                 source_vertices,
@@ -1134,10 +1107,6 @@ def run_cat_surface_gpu_pipeline(
                 cuda_graph=use_cuda_graph,
             )
 
-        # 官方主 CLI 会先调用一次 n_loops=-1 的 solver 做初始旋转。
-        # 这次调用虽然不消费 flow，却仍执行首个 outer loop，并把 fwhm
-        # 按 steps 次除以 3；GPU 编排必须保留这个状态转移才能与主 CLI
-        # 的第一次正式 run 使用同一组曲率尺度。
         warmup_start = time.perf_counter()
         solve_one(
             source_surface_device,
@@ -1151,8 +1120,6 @@ def run_cat_surface_gpu_pipeline(
         _synchronize(target_device)
         timings["rotation_warmup_seconds"] = time.perf_counter() - warmup_start
 
-        # 捕获本身需要一次正式参数的 kernel 预热；把第一个正式 run
-        # 保持 eager，随后复用它的 maps 捕获，避免额外执行一遍完整 solve。
         graph_ready = graph_enabled
 
         dartel_start = time.perf_counter()
@@ -1171,15 +1138,11 @@ def run_cat_surface_gpu_pipeline(
                 for index in range(steps)
             )
             if avg and run_index == runs - 1:
-                # 最后一轮 solve 不会修改 current_sphere；提前复制并启动
-                # avg source stencil 构建，让 CPU builder 与 GPU solve 重叠。
                 final_prewarp_sphere = current_sphere.copy()
                 avg_source_surface = _rotate_vertices(
                     source_surface.vertices, pole_angles
                 )
-                avg_source_sphere = _rotate_vertices(
-                    final_prewarp_sphere, pole_angles
-                )
+                avg_source_sphere = _rotate_vertices(final_prewarp_sphere, pole_angles)
                 avg_source_sphere_path = temp_dir / "avg-source.gii"
                 write_gifti_mesh(
                     avg_source_sphere_path,
@@ -1231,9 +1194,7 @@ def run_cat_surface_gpu_pipeline(
                     .astype(np.float32, copy=False)
                 )
             _synchronize(target_device)
-            timings[f"dartel_run_{run_index}_seconds"] = (
-                time.perf_counter() - run_start
-            )
+            timings[f"dartel_run_{run_index}_seconds"] = time.perf_counter() - run_start
             last_result = solve
             if run_index + 1 < runs:
                 next_sphere_path = temp_dir / f"rotated-{run_index + 1:03d}.gii"
@@ -1248,7 +1209,7 @@ def run_cat_surface_gpu_pipeline(
                     rotated_stencil_builder,
                     next_sphere_path,
                     next_stencil_path,
-                    f"第 {run_index + 1} 次 run 的 source stencil",
+                    f"{run_index + 1} run source stencil",
                     builder_options=(
                         "--no-normalize",
                         "--threads",
@@ -1257,23 +1218,21 @@ def run_cat_surface_gpu_pipeline(
                         str(source_surface_path),
                     ),
                 )
-                current_stencil_device = SurfaceStencil.from_file(
-                    next_stencil_path
-                ).to(target_device, geometry_dtype=torch.float32)
+                current_stencil_device = SurfaceStencil.from_file(next_stencil_path).to(
+                    target_device, geometry_dtype=torch.float32
+                )
         timings["source_dartel_total_seconds"] = time.perf_counter() - dartel_start
 
         if last_result is None:
-            raise RuntimeError("GPU DARTEL 没有产生结果")
+            raise RuntimeError("GPU DARTEL")
 
-        # 官方 -avg 只在最后一轮增加一次旋转 source/template 的 solve，
-        # 再把旋转后的结果逆旋转，并按 x/z 极点权重逐点合并。
         if avg:
             if avg_target_stencil_device is None or avg_target_surface_device is None:
-                raise RuntimeError("avg target stencil 没有准备完成")
+                raise RuntimeError("Avg target stencil")
             if final_prewarp_sphere is None:
-                raise RuntimeError("avg 缺少最后一轮 flow 应用前的 source sphere")
+                raise RuntimeError("Average mode is missing the warped source sphere")
             if avg_source_stencil_future is None:
-                raise RuntimeError("avg source stencil 没有启动构建")
+                raise RuntimeError("Avg source stencil start")
             try:
                 avg_source_stencil_path, avg_stencil_elapsed = (
                     avg_source_stencil_future.result()
@@ -1283,7 +1242,7 @@ def run_cat_surface_gpu_pipeline(
                     avg_source_stencil_executor.shutdown(wait=True)
             timings["avg_source_stencil_seconds"] = float(avg_stencil_elapsed)
             if avg_source_surface is None or avg_source_sphere is None:
-                raise RuntimeError("avg source 几何没有准备完成")
+                raise RuntimeError("Avg source geometry")
             avg_source_stencil_device = SurfaceStencil.from_file(
                 avg_source_stencil_path
             ).to(target_device, geometry_dtype=torch.float32)
@@ -1294,8 +1253,7 @@ def run_cat_surface_gpu_pipeline(
                 avg_source_sphere, dtype=torch.float32, device=target_device
             ).contiguous()
             avg_fwhm = tuple(
-                float(fwhm[0])
-                / (3.0 ** (steps * (runs + 1) + index))
+                float(fwhm[0]) / (3.0 ** (steps * (runs + 1) + index))
                 for index in range(steps)
             )
             avg_solve_start = time.perf_counter()

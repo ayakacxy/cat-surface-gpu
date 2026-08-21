@@ -59,7 +59,7 @@ conda activate cat-surface-gpu
 ```bash
 python -m pip install torch==2.6.0 \
   --index-url https://download.pytorch.org/whl/cu126
-python -m pip install -e '.[cuda,test]'
+python -m pip install '.[cuda,test]'
 ```
 
 检查环境和测试：
@@ -85,8 +85,7 @@ python -m pytest -q
 ## 🌐 运行 `CAT_Surf2Sphere`
 
 ```bash
-python tools/run_cat_surf2sphere_gpu.py \
-  --reference-cli bin/linux-x86_64/CAT_Surf2Sphere \
+cat-surf2sphere-gpu \
   --input-surface /path/to/coarse.white.gii \
   --output-surface /path/to/sphere.gii \
   --stop-at 10 \
@@ -118,16 +117,13 @@ python tools/benchmark_cat_surf2sphere_gpu.py \
 ## 🧭 运行 `CAT_SurfWarp`
 
 ```bash
-python tools/run_cat_surface_gpu_pipeline.py \
+cat-surfwarp-gpu \
   --source-surface /path/to/white.gii \
   --source-sphere /path/to/sphere.gii \
   --target-surface /path/to/template.white.gii \
   --target-sphere /path/to/template.sphere.gii \
   --output /path/to/sphere.reg.gii \
-  --rotation-depth-probe bin/linux-x86_64/cat_surface_rotation_depth \
   --rotation-feature-backend cuda-official-depth \
-  --stencil-builder bin/linux-x86_64/cat_surface_stencil_builder \
-  --rotated-stencil-builder bin/linux-x86_64/cat_surface_stencil_builder \
   --stencil-threads 8 \
   --device cuda \
   --kernel triton \
@@ -152,7 +148,7 @@ python tools/run_cat_surface_gpu_pipeline.py \
 | `cat_surface_rotation_depth` | 导出与上游一致的初始旋转 raw depth 特征 |
 | `cat_surface_stencil_builder` | 构建确定性重采样 stencil；默认使用 8 个 CPU worker，可通过 `--threads N` 调整 |
 
-四个程序均基于 [CAT-Surface commit `628b6851`](https://github.com/ChristianGaser/CAT-Surface/tree/628b6851d8638f3ab773cd25c0ec406d0ec61ede)，使用 `-O2 -fPIC` 构建；运行时只链接 glibc、libm 和 pthread，要求 glibc 2.29 或更新版本。SHA-256 见 [`bin/linux-x86_64/SHA256SUMS`](bin/linux-x86_64/SHA256SUMS)，两个 helper 的源码位于 [`tools/cat_surface_c/`](tools/cat_surface_c/)。
+四个程序均基于 [CAT-Surface commit `628b6851`](https://github.com/ChristianGaser/CAT-Surface/tree/628b6851d8638f3ab773cd25c0ec406d0ec61ede)，使用 `-O2 -fPIC` 构建；运行时只链接 glibc、libm 和 pthread，要求 glibc 2.29 或更新版本。SHA-256 见 [`bin/linux-x86_64/SHA256SUMS`](bin/linux-x86_64/SHA256SUMS)，两个 helper 的源码位于 [`native/`](native/)，完整重建步骤见 [BUILDING.md](BUILDING.md)。
 
 Python runner 使用对应的 `--stencil-threads` 参数。默认值 8 是为了避免 source/target 前处理和左右半球并发时出现 CPU 过度订阅；高核心数机器仍可显式选择 16 或 32。
 

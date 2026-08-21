@@ -1,4 +1,4 @@
-"""球面 stencil、设备常驻曲面算子和最终 warp 的基础合同测试。"""
+"""CAT-Surface GPU implementation."""
 
 # SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -18,7 +18,7 @@ from cat_surface_gpu import (
 
 
 def _make_small_stencil() -> SurfaceStencil:
-    """构造一个不依赖真实大曲面的最小 stencil。"""
+    """Make small stencil."""
 
     points = np.asarray(
         (
@@ -29,9 +29,7 @@ def _make_small_stencil() -> SurfaceStencil:
         ),
         dtype=np.float64,
     )
-    faces = np.asarray(
-        ((0, 2, 3), (2, 1, 3), (1, 0, 3), (0, 1, 2)), dtype=np.int32
-    )
+    faces = np.asarray(((0, 2, 3), (2, 1, 3), (1, 0, 3), (0, 1, 2)), dtype=np.int32)
     identity_indices = np.repeat(np.arange(4, dtype=np.int32)[:, None], 3, axis=1)
     identity_weights = np.zeros((4, 3), dtype=np.float64)
     identity_weights[:, 0] = 1.0
@@ -52,7 +50,7 @@ def _make_small_stencil() -> SurfaceStencil:
 
 
 def test_stencil_v2_round_trip_preserves_cached_unit_points(tmp_path):
-    """v2 文件应同时保存原始 stencil 和官方单位球面点。"""
+    """Test stencil v2 round trip preserves cached unit points."""
 
     stencil = _make_small_stencil()
     path = tmp_path / "small.stencil"
@@ -80,13 +78,11 @@ def test_stencil_v2_round_trip_preserves_cached_unit_points(tmp_path):
 
     loaded = SurfaceStencil.from_file(path)
     np.testing.assert_array_equal(loaded.faces, stencil.faces)
-    np.testing.assert_array_equal(
-        loaded.unit_sphere_points, stencil.unit_sphere_points
-    )
+    np.testing.assert_array_equal(loaded.unit_sphere_points, stencil.unit_sphere_points)
 
 
 def test_device_stencil_keeps_resampling_and_neighbours_on_cpu_device():
-    """设备 stencil 应一次性生成邻接表且不改变重采样结果。"""
+    """Test device stencil keeps resampling and neighbours on cpu device."""
 
     stencil = _make_small_stencil().to("cpu")
     vertices = torch.as_tensor(_make_small_stencil().sphere_points)
@@ -102,7 +98,7 @@ def test_device_stencil_keeps_resampling_and_neighbours_on_cpu_device():
 
 
 def test_type5_batched_sheet_maps_match_individual_maps():
-    """同一几何阶段批量复用时应保持每个 type5 sheet 图不变。"""
+    """Test type5 batched sheet maps match individual maps."""
 
     stencil = _make_small_stencil().to("cpu")
     vertices = torch.as_tensor(stencil.sphere_points, dtype=torch.float32)
@@ -117,7 +113,7 @@ def test_type5_batched_sheet_maps_match_individual_maps():
 
 
 def test_final_warp_is_finite_unit_length_and_uses_cached_points():
-    """零形变和 stencil warp 都应输出单位球面上的有限点。"""
+    """Test final warp is finite unit length and uses cached points."""
 
     stencil = _make_small_stencil()
     points = torch.as_tensor(stencil.sphere_points, dtype=torch.float32)
@@ -147,7 +143,7 @@ def test_final_warp_is_finite_unit_length_and_uses_cached_points():
 
 
 def test_default_parameters_match_cat_mu_schedule():
-    """默认正则参数应在第四个 loop 后按官方比例降低 mu。"""
+    """Test default parameters match cat mu schedule."""
 
     params = default_dartel_parameters()
     assert len(params) == 6

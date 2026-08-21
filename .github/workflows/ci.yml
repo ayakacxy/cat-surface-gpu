@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-package:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install CPU test environment
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install torch==2.6.0 --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install '.[test]' build
+      - name: Verify source and committed binaries
+        run: python scripts/verify_release.py
+      - name: Lint and format check
+        run: |
+          ruff check src tests tools scripts setup.py
+          ruff format --check src tests tools scripts setup.py
+      - name: Run CPU contracts
+        run: pytest -q
+      - name: Run bundled-helper synthetic smoke test
+        run: |
+          python tools/generate_synthetic_fixture.py --output /tmp/cat-surface-gpu-smoke --subdivisions 2
+          bin/linux-x86_64/cat_surface_stencil_builder \
+            /tmp/cat-surface-gpu-smoke/source.sphere.gii \
+            /tmp/cat-surface-gpu-smoke/source.stencil \
+            --surface /tmp/cat-surface-gpu-smoke/source.white.gii \
+            --threads 2
+          test -s /tmp/cat-surface-gpu-smoke/source.stencil
+      - name: Build wheel and source archive
+        run: python -m build
+      - name: Verify wheel contents
+        run: python scripts/verify_release.py --wheel "$(find dist -name '*.whl' -print -quit)"
+      - name: Test installed command-line interfaces
+        run: |
+          python -m pip install --force-reinstall --no-deps dist/*.whl
+          cat-surf2sphere-gpu --help
+          cat-surfwarp-gpu --help
+          cat-surface-rotation-gpu --help
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-distributions
+          path: dist/*
+          if-no-files-found: error

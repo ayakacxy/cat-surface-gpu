@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""验证旋转阶段固定规则空间索引的面片定位和重心权重。"""
+"""CAT-Surface GPU implementation."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ _MAP_RECORD = np.dtype([("face", "<i4"), ("weights", "<f8", (3,))])
 
 
 class UniformTriangleGrid:
-    """在 CPU 一次性建立固定球面三角形候选表。"""
+    """Represent UniformTriangleGrid."""
 
     def __init__(
         self,
@@ -33,11 +33,11 @@ class UniformTriangleGrid:
         points = np.asarray(points, dtype=np.float64)
         faces = np.asarray(faces, dtype=np.int32)
         if points.ndim != 2 or points.shape[1] != 3:
-            raise ValueError("points 必须是 [n,3]")
+            raise ValueError("points must have shape [n, 3]")
         if faces.ndim != 2 or faces.shape[1] != 3:
-            raise ValueError("faces 必须是 [m,3]")
+            raise ValueError("faces must have shape [m, 3]")
         if grid_size < 4 or margin < 0:
-            raise ValueError("grid_size 或 margin 不合法")
+            raise ValueError("Grid_size or margin valid")
         self.points = points
         self.faces = faces
         self.grid_size = int(grid_size)
@@ -48,7 +48,7 @@ class UniformTriangleGrid:
         self._build()
 
     def _build(self) -> None:
-        """把每个三角形的扩张 AABB 写入定长候选表。"""
+        """Build."""
 
         triangles = self.points[self.faces]
         lower = np.floor(
@@ -69,21 +69,19 @@ class UniformTriangleGrid:
                         cells.setdefault(base + x, []).append(face)
 
         max_candidates = max(len(value) for value in cells.values())
-        padded = np.full(
-            (self.cell_count, max_candidates), -1, dtype=np.int32
-        )
+        padded = np.full((self.cell_count, max_candidates), -1, dtype=np.int32)
         for cell, values in cells.items():
             padded[cell, : len(values)] = values
         self.candidates = padded
         self.active_cells = np.fromiter(cells, dtype=np.int64)
 
     def query(self, query_points: np.ndarray) -> np.ndarray:
-        """返回每个点所在网格单元的候选面片。"""
+        """Query."""
 
         query_points = np.asarray(query_points, dtype=np.float64)
-        cell = np.floor(
-            (query_points - self.grid_min) / self.cell_size
-        ).astype(np.int64)
+        cell = np.floor((query_points - self.grid_min) / self.cell_size).astype(
+            np.int64
+        )
         cell = np.clip(cell, 0, self.grid_size - 1)
         cell_id = cell[:, 0] + self.grid_size * (
             cell[:, 1] + self.grid_size * cell[:, 2]
@@ -94,7 +92,7 @@ class UniformTriangleGrid:
 def _segment_distance(
     point: np.ndarray, first: np.ndarray, second: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray]:
-    """计算点到线段的平方距离及最近点。"""
+    """Segment distance."""
 
     direction = second - first
     offset = point - first
@@ -112,7 +110,7 @@ def _segment_distance(
 
 
 def _barycentric(point: np.ndarray, triangle: np.ndarray) -> np.ndarray:
-    """按 bicpl 的三次叉积公式计算三角形重心权重。"""
+    """Barycentric."""
 
     weights: list[np.ndarray] = []
     for first, second, third in (
@@ -139,7 +137,7 @@ def closest_faces(
     *,
     batch_size: int = 1024,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """复现 bicpl 三角形最近点和重心权重的主要数值路径。"""
+    """Closest faces."""
 
     query_points = np.asarray(query_points, dtype=np.float64)
     triangles_all = np.asarray(points, dtype=np.float64)[faces]
@@ -169,7 +167,6 @@ def closest_faces(
         )
         projected = query[:, None, :] + plane_t[..., None] * normal
 
-        # 采用 bicpl point_within_triangle_2d 的等价点积表达式。
         point_offset = projected - first
         xx = np.sum(edge_a * edge_a, axis=-1)
         xy = np.sum(edge_a * edge_b, axis=-1)
@@ -214,10 +211,6 @@ def closest_faces(
             closest_vertex[..., None, None],
             axis=-2,
         )[..., 0, :]
-        vertex_distance_min = np.take_along_axis(
-            vertex_distance, closest_vertex[..., None], axis=-1
-        )[..., 0]
-
         prev_index = (closest_vertex - 1) % 3
         next_index = (closest_vertex + 1) % 3
         vertices = np.stack((first, second, third), axis=-2)
@@ -247,7 +240,6 @@ def closest_faces(
         candidate_point = np.where(inside[..., None], projected, outside_point)
         candidate_distance = np.where(valid, candidate_distance, np.inf)
 
-        # C 的候选扫描在距离严格更小时更新；网格中的 face 顺序固定为升序。
         best_index = np.argmin(candidate_distance, axis=-1)
         row = np.arange(stop - start)
         selected = candidate_faces[row, best_index]
@@ -259,47 +251,47 @@ def closest_faces(
 
 
 def _read_c_map(path: Path) -> tuple[np.ndarray, np.ndarray]:
-    """读取 map probe 的面片 ID 和双精度重心权重。"""
+    """Read c map."""
 
     with path.open("rb") as stream:
         raw = stream.read(_MAP_HEADER.size)
         if len(raw) != _MAP_HEADER.size:
-            raise ValueError("C map 文件头不完整")
+            raise ValueError("C map file")
         (n_points,) = _MAP_HEADER.unpack(raw)
         records = np.fromfile(stream, dtype=_MAP_RECORD, count=n_points)
     if records.size != n_points:
-        raise ValueError("C map 文件记录数不匹配")
+        raise ValueError("C map file")
     return records["face"].copy(), records["weights"].copy()
 
 
 def _read_rotated_points(path: Path) -> np.ndarray:
-    """读取 map probe 导出的 float32 旋转点。"""
+    """Read rotated points."""
 
     with path.open("rb") as stream:
         raw = stream.read(_MAP_HEADER.size)
         (n_points,) = _MAP_HEADER.unpack(raw)
         points = np.fromfile(stream, dtype="<f4", count=3 * n_points)
     if points.size != 3 * n_points:
-        raise ValueError("旋转点文件长度不匹配")
+        raise ValueError("Rotation file length")
     return points.reshape(n_points, 3)
 
 
 def _read_rotation_values(path: Path) -> tuple[np.ndarray, np.ndarray]:
-    """读取官方 probe 导出的 source/target 曲率。"""
+    """Read rotation values."""
 
     with path.open("rb") as stream:
         header = np.fromfile(stream, dtype="<i4", count=2)
         if header.size != 2:
-            raise ValueError("旋转曲率文件头不完整")
+            raise ValueError("Rotation file")
         source = np.fromfile(stream, dtype="<f8", count=int(header[0]))
         target = np.fromfile(stream, dtype="<f8", count=int(header[1]))
     if source.size != header[0] or target.size != header[1]:
-        raise ValueError("旋转曲率文件长度不匹配")
+        raise ValueError("Rotation file length")
     return source, target
 
 
 def main() -> int:
-    """比较规则网格候选定位与官方 C map probe。"""
+    """Main."""
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--target-stencil", type=Path, required=True)
@@ -318,8 +310,7 @@ def main() -> int:
 
     start = time.perf_counter()
     grid = UniformTriangleGrid(
-        target_points, target_faces,
-        grid_size=args.grid_size, margin=args.margin
+        target_points, target_faces, grid_size=args.grid_size, margin=args.margin
     )
     build_seconds = time.perf_counter() - start
     start = time.perf_counter()
@@ -354,7 +345,7 @@ def main() -> int:
     if args.rotation_values is not None:
         source_values, target_values = _read_rotation_values(args.rotation_values)
         if source_values.size != rotated_points.shape[0]:
-            raise ValueError("source 曲率长度与旋转点数不一致")
+            raise ValueError("Source length and rotation does not match")
         c_sampled = (
             target_values[target_faces[reference_faces]] * reference_weights
         ).sum(axis=1)
@@ -375,9 +366,7 @@ def main() -> int:
                 ),
             }
         )
-    print(
-        result
-    )
+    print(result)
     return 0
 
 

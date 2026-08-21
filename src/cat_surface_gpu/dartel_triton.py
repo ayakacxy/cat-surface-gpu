@@ -1,4 +1,4 @@
-"""DARTEL 规则网格算子的 Triton 融合 kernel。"""
+"""Fused Triton kernels for CAT-Surface DARTEL grid operations."""
 
 # SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -7,8 +7,6 @@ from __future__ import annotations
 import torch
 
 
-# 这些权重只由网格参数和正则参数决定；缓存后可避免每次 FMG 调用都发生
-# 一次 host→device 的小张量创建，也使 CUDA Graph 捕获期间不再触发 H2D 拷贝。
 _WEIGHTS_CACHE: dict[tuple[object, ...], torch.Tensor] = {}
 
 
@@ -17,7 +15,7 @@ def _cached_weights(
     device: torch.device,
     dtype: torch.dtype,
 ) -> torch.Tensor:
-    """返回指定设备和 dtype 上可复用的常量权重。"""
+    """Cached weights."""
 
     key = (
         device.type,
@@ -35,13 +33,13 @@ def _cached_weights(
 try:
     import triton
     import triton.language as tl
-except ImportError:  # pragma: no cover - 由设备环境决定
+except ImportError:  # Triton is an optional runtime dependency.
     triton = None
     tl = None
 
 
 def available() -> bool:
-    """返回 Triton 包是否可导入。"""
+    """Return whether Triton can be imported in this environment."""
 
     return triton is not None and tl is not None
 
@@ -50,7 +48,7 @@ if available():
 
     @triton.jit
     def _wt2_kernel(distance):
-        """计算 CAT resize 使用的三点二次插值权重。"""
+        """Wt2 kernel."""
 
         absolute = tl.abs(distance)
         inner = 0.75 - absolute * absolute
@@ -71,7 +69,7 @@ if available():
         coordinate_fp32: tl.constexpr,
         offsets: tl.constexpr,
     ):
-        """以一个程序块完成一个多通道场的三点二维重采样。"""
+        """Resize field kernel."""
 
         index = tl.program_id(0) * offsets + tl.arange(0, offsets)
         mask = index < total
@@ -80,8 +78,6 @@ if available():
         x = local % target_nx
         y = local // target_nx
 
-        # 坐标和权重也随显式 DARTEL dtype 选择；FP32 路径避免在每次
-        # multilevel resize 中无意引入 FP64 运算，FP64 reference 保持原公式。
         if coordinate_fp32:
             x_location = (x.to(tl.float32) + 0.5) * source_nx / target_nx - 0.5
             x_origin = tl.floor(x_location + 0.5).to(tl.int32)
@@ -201,7 +197,7 @@ if available():
         ny,
         offsets: tl.constexpr,
     ):
-        """融合膜正则模板和三分量 Hessian 的系统乘法。"""
+        """Apply membrane system kernel."""
 
         index = tl.program_id(0) * offsets + tl.arange(0, offsets)
         mask = index < n_points
@@ -255,7 +251,7 @@ if available():
         color,
         offsets: tl.constexpr,
     ):
-        """为一个红黑颜色执行一次膜正则 Gauss-Seidel 更新。"""
+        """Relax membrane kernel."""
 
         index = tl.program_id(0) * offsets + tl.arange(0, offsets)
         mask = index < n_points
@@ -263,7 +259,6 @@ if available():
         y = index // nx
         xm = y * nx + tl.where(x == 0, nx - 1, x - 1)
         xp = y * nx + tl.where(x == nx - 1, 0, x + 1)
-        # y=0 的镜像邻居是当前行同一列，而不是展平数组的第0点。
         ym = tl.where(y == 0, y * nx + x, (y - 1) * nx + x)
         yp = tl.where(y == ny - 1, (ny - 1) * nx + x, (y + 1) * nx + x)
         active = mask & (((x + y) & 1) == color)
@@ -307,15 +302,13 @@ if available():
         color,
         offsets: tl.constexpr,
     ):
-        """只遍历一个红黑颜色并原地更新其半数网格点。"""
+        """Relax membrane color inplace kernel."""
 
         color_points = nx // 2
         local = tl.program_id(0) * offsets + tl.arange(0, offsets)
         mask = local < (n_points // 2)
         row = local // color_points
         pair = local - row * color_points
-        # nx 为偶数时，每行每种颜色恰有 nx/2 个点；按行展开后，
-        # x 的奇偶由当前行和目标颜色共同决定，得到与 checker 顺序一致的点集。
         x = 2 * pair + ((row + color) & 1)
         index = row * nx + x
         xm = row * nx + tl.where(x == 0, nx - 1, x - 1)
@@ -326,8 +319,6 @@ if available():
         w00 = tl.load(weights_ptr + 0)
         w01 = tl.load(weights_ptr + 1)
         w10 = tl.load(weights_ptr + 2)
-        ux = tl.load(solution_ptr + index, mask=mask, other=0.0)
-        uy = tl.load(solution_ptr + n_points + index, mask=mask, other=0.0)
         ux_m = tl.load(solution_ptr + xm, mask=mask, other=0.0)
         ux_p = tl.load(solution_ptr + xp, mask=mask, other=0.0)
         ux_ym = tl.load(solution_ptr + ym, mask=mask, other=0.0)
@@ -365,20 +356,22 @@ if available():
         coordinate_fp32: tl.constexpr,
         offsets: tl.constexpr,
     ):
-        """融合一次 DARTEL squaring 的五通道采样和增量更新。"""
+        """Squaring update kernel."""
 
         index = tl.program_id(0) * offsets + tl.arange(0, offsets)
         mask = index < n_points
         if coordinate_fp32:
             x = tl.load(map_ptr + index, mask=mask, other=0.0).to(tl.float32) - 1.0
-            y = tl.load(
-                map_ptr + n_points + index, mask=mask, other=0.0
-            ).to(tl.float32) - 1.0
+            y = (
+                tl.load(map_ptr + n_points + index, mask=mask, other=0.0).to(tl.float32)
+                - 1.0
+            )
         else:
             x = tl.load(map_ptr + index, mask=mask, other=0.0).to(tl.float64) - 1.0
-            y = tl.load(
-                map_ptr + n_points + index, mask=mask, other=0.0
-            ).to(tl.float64) - 1.0
+            y = (
+                tl.load(map_ptr + n_points + index, mask=mask, other=0.0).to(tl.float64)
+                - 1.0
+            )
         ix = tl.floor(x).to(tl.int32)
         iy = tl.floor(y).to(tl.int32)
         dx1 = x - ix.to(x.dtype)
@@ -386,29 +379,21 @@ if available():
         dx2 = 1.0 - dx1
         dy2 = 1.0 - dy1
 
-        # 用 floor 形式实现非负模；Triton 的整数 `%` 对负数的语义不适合
-        # CAT 的周期边界，边界点必须与 Python ``torch.remainder`` 一致。
         if coordinate_fp32:
             x_period = tl.floor(ix.to(tl.float32) / nx).to(tl.int32)
             y_period = tl.floor(iy.to(tl.float32) / (2 * ny)).to(tl.int32)
-            y_next_period = tl.floor(
-                (iy + 1).to(tl.float32) / (2 * ny)
-            ).to(tl.int32)
+            y_next_period = tl.floor((iy + 1).to(tl.float32) / (2 * ny)).to(tl.int32)
         else:
             x_period = tl.floor(ix.to(tl.float64) / nx).to(tl.int32)
             y_period = tl.floor(iy.to(tl.float64) / (2 * ny)).to(tl.int32)
-            y_next_period = tl.floor(
-                (iy + 1).to(tl.float64) / (2 * ny)
-            ).to(tl.int32)
+            y_next_period = tl.floor((iy + 1).to(tl.float64) / (2 * ny)).to(tl.int32)
         x22 = ix - x_period * nx
         x12 = tl.where(x22 == nx - 1, 0, x22 + 1)
         x21 = x22
         x11 = x12
         period_y = 2 * ny
         y22_raw = iy - y_period * period_y
-        y12_raw = y22_raw
         y21_raw = (iy + 1) - y_next_period * period_y
-        y11_raw = y21_raw
         y22 = tl.where(y22_raw >= ny, period_y - y22_raw - 1, y22_raw)
         y12 = y22
         y21 = tl.where(y21_raw >= ny, period_y - y21_raw - 1, y21_raw)
@@ -418,35 +403,19 @@ if available():
         k12_bx = tl.load(b_input_ptr + y12 * nx + x12, mask=mask, other=0.0)
         k21_bx = tl.load(b_input_ptr + y21 * nx + x21, mask=mask, other=0.0)
         k11_bx = tl.load(b_input_ptr + y11 * nx + x11, mask=mask, other=0.0)
-        k22_by = tl.load(
-            b_input_ptr + n_points + y22 * nx + x22, mask=mask, other=0.0
-        )
-        k12_by = tl.load(
-            b_input_ptr + n_points + y12 * nx + x12, mask=mask, other=0.0
-        )
-        k21_by = tl.load(
-            b_input_ptr + n_points + y21 * nx + x21, mask=mask, other=0.0
-        )
-        k11_by = tl.load(
-            b_input_ptr + n_points + y11 * nx + x11, mask=mask, other=0.0
-        )
+        k22_by = tl.load(b_input_ptr + n_points + y22 * nx + x22, mask=mask, other=0.0)
+        k12_by = tl.load(b_input_ptr + n_points + y12 * nx + x12, mask=mask, other=0.0)
+        k21_by = tl.load(b_input_ptr + n_points + y21 * nx + x21, mask=mask, other=0.0)
+        k11_by = tl.load(b_input_ptr + n_points + y11 * nx + x11, mask=mask, other=0.0)
 
         k22_a00 = tl.load(a_input_ptr + y22 * nx + x22, mask=mask, other=0.0)
         k12_a00 = tl.load(a_input_ptr + y12 * nx + x12, mask=mask, other=0.0)
         k21_a00 = tl.load(a_input_ptr + y21 * nx + x21, mask=mask, other=0.0)
         k11_a00 = tl.load(a_input_ptr + y11 * nx + x11, mask=mask, other=0.0)
-        k22_a11 = tl.load(
-            a_input_ptr + n_points + y22 * nx + x22, mask=mask, other=0.0
-        )
-        k12_a11 = tl.load(
-            a_input_ptr + n_points + y12 * nx + x12, mask=mask, other=0.0
-        )
-        k21_a11 = tl.load(
-            a_input_ptr + n_points + y21 * nx + x21, mask=mask, other=0.0
-        )
-        k11_a11 = tl.load(
-            a_input_ptr + n_points + y11 * nx + x11, mask=mask, other=0.0
-        )
+        k22_a11 = tl.load(a_input_ptr + n_points + y22 * nx + x22, mask=mask, other=0.0)
+        k12_a11 = tl.load(a_input_ptr + n_points + y12 * nx + x12, mask=mask, other=0.0)
+        k21_a11 = tl.load(a_input_ptr + n_points + y21 * nx + x21, mask=mask, other=0.0)
+        k11_a11 = tl.load(a_input_ptr + n_points + y11 * nx + x11, mask=mask, other=0.0)
         k22_a01 = tl.load(
             a_input_ptr + 2 * n_points + y22 * nx + x22, mask=mask, other=0.0
         )
@@ -501,7 +470,9 @@ if available():
         tl.store(b_output_ptr + n_points + index, old_by + b_increment_y, mask=mask)
         tl.store(a_output_ptr + index, old_a00 + a_increment_00, mask=mask)
         tl.store(a_output_ptr + n_points + index, old_a11 + a_increment_11, mask=mask)
-        tl.store(a_output_ptr + 2 * n_points + index, old_a01 + a_increment_01, mask=mask)
+        tl.store(
+            a_output_ptr + 2 * n_points + index, old_a01 + a_increment_01, mask=mask
+        )
         tl.store(increment_ptr + index, b_increment_x, mask=mask)
         tl.store(increment_ptr + n_points + index, b_increment_y, mask=mask)
 
@@ -511,18 +482,18 @@ def resize_field_triton(
     target_nx: int,
     target_ny: int,
 ) -> torch.Tensor:
-    """在 CUDA 上执行 CAT 三点二维重采样的融合实现。"""
+    """Resize a multichannel DARTEL field with a fused CUDA kernel."""
 
     if not available():
-        raise RuntimeError("当前 Python 环境没有可用的 Triton")
+        raise RuntimeError("Triton is unavailable in the current Python environment")
     if value.device.type != "cuda":
-        raise ValueError("Triton resize 只接受 CUDA 张量")
+        raise ValueError("Triton resize requires CUDA tensors")
     if value.dtype not in {torch.float32, torch.float64}:
-        raise ValueError("Triton resize 当前只接受 float32 或 float64")
+        raise ValueError("Triton resize supports only float32 and float64")
     if value.ndim != 3:
-        raise ValueError("Triton resize 需要 [channel, ny, nx] 张量")
+        raise ValueError("Triton resize expects shape [channel, ny, nx]")
     if target_nx < 1 or target_ny < 1:
-        raise ValueError("Triton resize 目标尺寸必须为正数")
+        raise ValueError("Triton resize target dimensions must be positive")
     value = value.contiguous()
     channels = int(value.shape[0])
     source_ny = int(value.shape[1])
@@ -561,18 +532,20 @@ def apply_membrane_system_triton(
     w01: float,
     w10: float,
 ) -> torch.Tensor:
-    """在 CUDA 上融合计算膜系统的 Hessian 加正则项。"""
+    """Apply the membrane Hessian and regularizer on CUDA."""
 
     if not available():
-        raise RuntimeError("当前 Python 环境没有可用的 Triton")
+        raise RuntimeError("Triton is unavailable in the current Python environment")
     if field.device.type != "cuda":
-        raise ValueError("Triton 膜系统只接受 CUDA 张量")
+        raise ValueError("The Triton membrane-system kernel requires CUDA tensors")
     if field.dtype not in {torch.float32, torch.float64}:
-        raise ValueError("Triton 膜系统当前只接受 float32 或 float64")
+        raise ValueError(
+            "The Triton membrane-system kernel supports only float32 and float64"
+        )
     if field.ndim != 3 or tuple(field.shape[:1]) != (2,):
-        raise ValueError("field 形状必须是 [2, ny, nx]")
+        raise ValueError("Field shape must be [2, ny, nx]")
     if tuple(hessian.shape) != (3, field.shape[1], field.shape[2]):
-        raise ValueError("hessian 与 field 形状不匹配")
+        raise ValueError("Hessian and field shape")
     field = field.contiguous()
     hessian = hessian.contiguous()
     nx = int(field.shape[2])
@@ -607,30 +580,26 @@ def relax_membrane_triton(
     *,
     inplace: bool = False,
 ) -> torch.Tensor:
-    """在 CUDA 偶数宽度网格上执行融合 Triton 膜松弛。
-
-    ``inplace=True`` 只发射当前红黑颜色的半数点并原地更新；
-    ``inplace=False`` 保留旧的全网格双缓冲实现，供数值 A/B 使用。
-    """
+    """Run red-black membrane relaxation on an even-width CUDA grid."""
 
     if not available():
-        raise RuntimeError("当前 Python 环境没有可用的 Triton")
+        raise RuntimeError("Triton is unavailable in the current Python environment")
     if solution.device.type != "cuda":
-        raise ValueError("Triton 膜松弛只接受 CUDA 张量")
+        raise ValueError("Triton membrane relaxation requires CUDA tensors")
     if solution.dtype not in {torch.float32, torch.float64}:
-        raise ValueError("Triton 膜松弛当前只接受 float32 或 float64")
+        raise ValueError("Triton membrane relaxation supports only float32 and float64")
     if solution.ndim != 3 or tuple(solution.shape[:1]) != (2,):
-        raise ValueError("solution 形状必须是 [2, ny, nx]")
+        raise ValueError("Solution shape must be [2, ny, nx]")
     if tuple(hessian.shape) != (3, solution.shape[1], solution.shape[2]):
-        raise ValueError("hessian 与 solution 形状不匹配")
+        raise ValueError("Hessian and solution shape")
     if tuple(right_hand.shape) != tuple(solution.shape):
-        raise ValueError("right_hand 与 solution 形状不匹配")
+        raise ValueError("Right_hand and solution shape")
     nx = int(solution.shape[2])
     ny = int(solution.shape[1])
     if nx % 2 != 0 or nx < 2:
-        raise ValueError("Triton 红黑膜松弛要求 nx 为大于1的偶数")
+        raise ValueError("Triton nx 1")
     if nit < 0:
-        raise ValueError(f"松弛次数不能为负数，得到 {nit}")
+        raise ValueError(f"Cannot be negative , {nit}")
     block = 256
     grid = (triton.cdiv(nx * ny, block),)
     weights = _cached_weights((w00, w01, w10), solution.device, solution.dtype)
@@ -650,8 +619,6 @@ def relax_membrane_triton(
                 num_warps=8,
             )
         return solution
-    # 红黑更新虽然只读相反颜色，但原地写入会让不同 Triton program
-    # 之间出现未定义的读写次序；用双缓冲明确表达一次颜色更新的快照。
     source = solution
     destination = torch.empty_like(solution)
     for iteration in range(2 * nit):
@@ -680,22 +647,22 @@ def squaring_update_triton(
     current_map: torch.Tensor,
     current_jacobian: torch.Tensor,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """在 CUDA 上融合一次 squaring 的五通道采样和原位增量。"""
+    """Fuse one five-channel DARTEL scaling-and-squaring update."""
 
     if not available():
-        raise RuntimeError("当前 Python 环境没有可用的 Triton")
+        raise RuntimeError("Triton is unavailable in the current Python environment")
     if b_value.device.type != "cuda":
-        raise ValueError("Triton squaring 只接受 CUDA 张量")
+        raise ValueError("Triton squaring requires CUDA tensors")
     if b_value.dtype not in {torch.float32, torch.float64}:
-        raise ValueError("Triton squaring 当前只接受 float32 或 float64")
+        raise ValueError("Triton squaring supports only float32 and float64")
     if b_value.ndim != 3 or tuple(b_value.shape[:1]) != (2,):
-        raise ValueError("b_value 形状必须是 [2, ny, nx]")
+        raise ValueError("B_value shape must be [2, ny, nx]")
     if tuple(a_value.shape) != (3, b_value.shape[1], b_value.shape[2]):
-        raise ValueError("a_value 与 b_value 形状不匹配")
+        raise ValueError("A_value and b_value shape")
     if tuple(current_map.shape) != tuple(b_value.shape):
-        raise ValueError("current_map 与 b_value 形状不匹配")
+        raise ValueError("Current_map and b_value shape")
     if tuple(current_jacobian.shape) != (4, b_value.shape[1], b_value.shape[2]):
-        raise ValueError("current_jacobian 与 b_value 形状不匹配")
+        raise ValueError("Current_jacobian and b_value shape")
     b_value = b_value.contiguous()
     a_value = a_value.contiguous()
     current_map = current_map.contiguous()

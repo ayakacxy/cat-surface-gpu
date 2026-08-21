@@ -7,3 +7,6 @@ dependencies:
   - numpy>=1.24
   - nibabel>=5.0
   - pytest>=8.0
+  - packaging>=24
+  - setuptools>=77
+  - wheel>=0.43

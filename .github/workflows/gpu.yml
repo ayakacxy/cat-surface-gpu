@@ -1,0 +1,42 @@
+name: CUDA validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_end_to_end:
+        description: Run the private-fixture end-to-end command configured on the runner
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  cuda:
+    runs-on: [self-hosted, linux, x64, gpu]
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create isolated validation environment
+        run: |
+          python3.11 -m venv .venv-ci
+          .venv-ci/bin/python -m pip install --upgrade pip
+          .venv-ci/bin/python -m pip install torch==2.6.0 --index-url https://download.pytorch.org/whl/cu126
+          .venv-ci/bin/python -m pip install '.[cuda,test]'
+      - name: Require a real CUDA device
+        run: |
+          .venv-ci/bin/python - <<'PY'
+          import torch
+          assert torch.cuda.is_available(), "CUDA is not available on this runner"
+          print(torch.__version__, torch.version.cuda, torch.cuda.get_device_name(0))
+          PY
+      - name: Run CPU and CUDA contracts
+        run: .venv-ci/bin/python -m pytest -q
+      - name: Run configured private-fixture A/B
+        if: inputs.run_end_to_end
+        env:
+          CAT_SURFACE_GPU_E2E_COMMAND: ${{ secrets.CAT_SURFACE_GPU_E2E_COMMAND }}
+        run: |
+          test -n "${CAT_SURFACE_GPU_E2E_COMMAND}"
+          bash -lc "${CAT_SURFACE_GPU_E2E_COMMAND}"

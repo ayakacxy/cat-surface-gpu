@@ -1,4 +1,4 @@
-"""CAT-Surface 曲面阶段与 DARTEL 的设备常驻组合后端。"""
+"""Device-resident surface feature, DARTEL, and final-warp operations."""
 
 # SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -16,7 +16,7 @@ from .surface_stencil import SurfaceStencil, SurfaceStencilDevice
 
 @dataclass(frozen=True)
 class DartelSolveResult:
-    """保存设备上的最终变换、曲率图和诊断量。"""
+    """Store a solved flow, warped feature maps, and DARTEL diagnostics."""
 
     flow: torch.Tensor
     source_maps: torch.Tensor
@@ -26,7 +26,7 @@ class DartelSolveResult:
 
 @dataclass
 class _DartelCudaGraphEntry:
-    """保存固定 shape/参数的 DARTEL CUDA Graph 及其静态张量。"""
+    """Store one captured DARTEL CUDA Graph and its static tensors."""
 
     graph: torch.cuda.CUDAGraph
     source_maps: torch.Tensor
@@ -53,7 +53,7 @@ def _dartel_cuda_graph_key(
     squaring_kernel: str | None,
     optimized: bool,
 ) -> tuple[object, ...]:
-    """构造不会混用不同 DARTEL 配置的 Graph cache key。"""
+    """Dartel cuda graph key."""
 
     return (
         source_maps.device.type,
@@ -82,12 +82,12 @@ def default_dartel_parameters(
     muchange: int = 4,
     murate: float = 1.25,
 ) -> tuple[tuple[float, float, float, float, float], ...]:
-    """构造 CAT_SurfWarp 默认的逐 loop 正则参数。"""
+    """Return upstream-compatible regularization parameters for each loop."""
 
     if loop <= 0:
-        raise ValueError(f"loop 必须为正数，得到 {loop}")
+        raise ValueError(f"loop must be positive, got {loop}")
     if muchange <= 0 or murate <= 0:
-        raise ValueError("muchange 和 murate 必须为正数")
+        raise ValueError("muchange and murate must be positive")
     values: list[tuple[float, float, float, float, float]] = []
     current_mu = float(mu)
     current_lambda = float(lambda_)
@@ -123,14 +123,13 @@ def _capture_dartel_cuda_graph(
     dtype: torch.dtype,
     optimized: bool,
 ) -> _DartelCudaGraphEntry:
-    """捕获一个固定 shape/参数的 DARTEL Graph。"""
+    """Capture dartel cuda graph."""
 
     if device.type != "cuda":
-        raise ValueError("DARTEL CUDA Graph 只支持 CUDA 设备")
+        raise ValueError("DARTEL CUDA Graph capture requires a CUDA device")
     static_source = source_maps.detach().clone().contiguous()
     static_target = target_maps.detach().clone().contiguous()
     graph = torch.cuda.CUDAGraph()
-    # 捕获前等待曲率 stream 和上一轮 eager warm-up，避免把外部依赖带入图。
     torch.cuda.synchronize(device)
     started = time.perf_counter()
     current_stream = torch.cuda.current_stream(device)
@@ -183,15 +182,19 @@ def prepare_dartel_cuda_graph(
     dtype: torch.dtype = torch.float64,
     optimized: bool = True,
 ) -> float:
-    """预热后捕获固定 DARTEL 配置，返回一次性捕获耗时。"""
+    """Prepare dartel cuda graph."""
 
     target_device = resolve_device(device)
-    source = torch.as_tensor(source_maps, dtype=dtype, device=target_device).contiguous()
-    target = torch.as_tensor(target_maps, dtype=dtype, device=target_device).contiguous()
+    source = torch.as_tensor(
+        source_maps, dtype=dtype, device=target_device
+    ).contiguous()
+    target = torch.as_tensor(
+        target_maps, dtype=dtype, device=target_device
+    ).contiguous()
     if target_device.type != "cuda":
-        raise ValueError("DARTEL CUDA Graph 只支持 CUDA 设备")
+        raise ValueError("DARTEL CUDA Graph capture requires a CUDA device")
     if tuple(source.shape) != tuple(target.shape):
-        raise ValueError("source_maps 和 target_maps 形状必须一致")
+        raise ValueError("source_maps and target_maps must have the same shape")
     key = _dartel_cuda_graph_key(
         source,
         target,
@@ -228,7 +231,7 @@ def prepare_dartel_cuda_graph(
 
 
 def clear_dartel_cuda_graph_cache() -> None:
-    """释放当前进程保存的 DARTEL CUDA Graph。"""
+    """Clear dartel cuda graph cache."""
 
     _DARTEL_CUDA_GRAPH_CACHE.clear()
 
@@ -251,35 +254,28 @@ def solve_dartel_maps(
     assume_initial_nonzero: bool = False,
     cuda_graph: bool = False,
 ) -> DartelSolveResult:
-    """在同一设备上执行 CAT 默认多 step DARTEL solve。
-
-    ``optimized=False`` 透传到逐通道插值的 reference DARTEL 路径。
-    ``cuda_graph=True`` 使用同一 shape/参数的 CUDA Graph；调用方应先完成
-    一次 eager warm-up 或显式调用 ``prepare_dartel_cuda_graph``。
-    """
+    """Solve DARTEL feature maps while preserving upstream loop semantics."""
 
     if cycles < 0 or nit < 0 or its < 0:
-        raise ValueError("cycles、nit 和 its 不能为负数")
+        raise ValueError("cycles, nit, and its must be non-negative")
     if squaring_kernel not in {None, "auto", "torch", "triton"}:
-        raise ValueError(
-            "squaring_kernel 必须为 None、auto、torch 或 triton"
-        )
+        raise ValueError("squaring_kernel must be None, 'auto', 'torch', or 'triton'")
     target_device = resolve_device(device)
     source = torch.as_tensor(source_maps, dtype=dtype, device=target_device)
     target = torch.as_tensor(target_maps, dtype=dtype, device=target_device)
     if source.ndim != 3 or target.ndim != 3:
-        raise ValueError("source_maps 和 target_maps 必须是 [steps, ny, nx]")
+        raise ValueError("source_maps and target_maps must have shape [steps, ny, nx]")
     if tuple(source.shape) != tuple(target.shape):
-        raise ValueError("source_maps 和 target_maps 形状必须一致")
+        raise ValueError("Source_maps target_maps shape must")
     if source.shape[0] < 1:
-        raise ValueError("至少需要一个 DARTEL step")
+        raise ValueError("At least one DARTEL step is required")
     source = source.contiguous()
     target = target.contiguous()
     params = default_dartel_parameters(loop=loop)
 
     if cuda_graph:
         if target_device.type != "cuda":
-            raise ValueError("cuda_graph=True 要求 CUDA 设备")
+            raise ValueError("cuda_graph=True requires a CUDA device")
         key = _dartel_cuda_graph_key(
             source,
             target,
@@ -295,7 +291,6 @@ def solve_dartel_maps(
         )
         entry = _DARTEL_CUDA_GRAPH_CACHE.get(key)
         if entry is None:
-            # 显式 graph 请求不能静默退回 eager；直接捕获当前输入。
             entry = _capture_dartel_cuda_graph(
                 source,
                 target,
@@ -317,8 +312,6 @@ def solve_dartel_maps(
             entry.target_maps.copy_(target)
             entry.graph.replay()
         return DartelSolveResult(
-            # Graph replay 会复用同一组静态输出；返回独立快照，避免
-            # 后续 run/avg replay 覆盖调用方仍在使用的上一轮 flow。
             flow=entry.flow.clone().contiguous(),
             source_maps=entry.source_maps.clone().contiguous(),
             target_maps=entry.target_maps.clone().contiguous(),
@@ -398,21 +391,12 @@ def solve_dartel_from_surfaces(
     assume_initial_nonzero: bool = False,
     cuda_graph: bool = False,
 ) -> DartelSolveResult:
-    """曲率、sheet 映射和 DARTEL 在同一设备上连续执行。
-
-    source 与 target 的曲率图彼此独立；CUDA 下默认用两个 stream 重叠
-    两侧的重采样、曲率计算和 sheet 映射。``parallel_sides=False`` 保留
-    原来的顺序路径，便于 reference A/B。``optimized=False`` 保留逐通道
-    DARTEL 插值路径；``cuda_graph=True`` 只在 CUDA 上启用固定 shape 的
-    DARTEL Graph。
-    """
+    """Build curvature sheets from surfaces and solve their DARTEL flow."""
 
     if n_steps < 1 or n_steps > len(fwhm) or n_steps > len(curvtypes):
-        raise ValueError("n_steps 必须落在 fwhm 和 curvtypes 的有效范围内")
+        raise ValueError("n_steps must not exceed the lengths of fwhm and curvtypes")
     if squaring_kernel not in {None, "auto", "torch", "triton"}:
-        raise ValueError(
-            "squaring_kernel 必须为 None、auto、torch 或 triton"
-        )
+        raise ValueError("squaring_kernel must be None, 'auto', 'torch', or 'triton'")
     target_device = resolve_device(device)
     if isinstance(source_stencil, SurfaceStencil):
         source_device = source_stencil.to(target_device, geometry_dtype=torch.float32)
@@ -425,9 +409,9 @@ def solve_dartel_from_surfaces(
     else:
         target_device_stencil = target_stencil
     if source_device.sphere_points.device != target_device:
-        raise ValueError("source_stencil 必须已经位于请求设备")
+        raise ValueError("source_stencil must be on the requested device")
     if target_device_stencil.sphere_points.device != target_device:
-        raise ValueError("target_stencil 必须已经位于请求设备")
+        raise ValueError("target_stencil must be on the requested device")
 
     source = torch.as_tensor(source_vertices, device=target_device)
     target = torch.as_tensor(target_vertices, device=target_device)
@@ -437,19 +421,17 @@ def solve_dartel_from_surfaces(
     for curvtype in curvtypes[:n_steps]:
         if int(curvtype) not in (2, 5):
             raise NotImplementedError(
-                "当前设备常驻曲面后端只覆盖官方 curvtype=2 和 curvtype=5"
+                "The device surface backend supports only upstream curvtype 2 and 5"
             )
 
     def build_maps(
         stencil: SurfaceStencilDevice,
         mapped_surface: torch.Tensor,
     ) -> tuple[torch.Tensor, ...]:
-        """按官方 steps 顺序生成一侧的曲率 sheet 图。"""
+        """Build maps."""
 
         requested_types = tuple(int(item) for item in curvtypes[:n_steps])
         if n_steps > 1 and all(item == 5 for item in requested_types):
-            # type5 的 50 mm 几何平滑和法向只依赖当前 mapped_surface；同一
-            # steps 内的不同 fwhm 只改变标量 heat-kernel，可安全复用前两项。
             return stencil.curvature_type5_to_sheet_many(
                 mapped_surface,
                 tuple(float(item) for item in fwhm[:n_steps]),
@@ -507,7 +489,7 @@ def solve_dartel_from_surfaces(
 
 
 def _wrap_displacement(value: torch.Tensor) -> torch.Tensor:
-    """复现 CAT apply_warp 对周期形变分量的逐条件折返。"""
+    """Wrap displacement."""
 
     value = torch.where(value >= 1.0, value - torch.floor(value), value)
     value = torch.where(value <= -1.0, value + torch.floor(-value), value)
@@ -524,15 +506,15 @@ def apply_flow_to_sphere(
     device: str | torch.device = "auto",
     dtype: torch.dtype = torch.float64,
 ) -> torch.Tensor:
-    """在 GPU 上复现 CAT ``apply_warp`` 的二维 flow 到球面变换。"""
+    """Apply flow to sphere."""
 
     target_device = resolve_device(device)
     sphere = torch.as_tensor(sphere_vertices, device=target_device)
     deformation = torch.as_tensor(flow, dtype=dtype, device=target_device)
     if sphere.ndim != 2 or sphere.shape[1] != 3:
-        raise ValueError("sphere_vertices 形状必须是 [points, 3]")
+        raise ValueError("sphere_vertices must have shape [points, 3]")
     if deformation.ndim != 3 or deformation.shape[0] != 2:
-        raise ValueError("flow 形状必须是 [2, ny, nx]")
+        raise ValueError("flow must have shape [2, ny, nx]")
     if unit_sphere_vertices is None:
         sphere = sphere.to(torch.float32)
         sphere = sphere / torch.linalg.vector_norm(
@@ -543,7 +525,7 @@ def apply_flow_to_sphere(
             unit_sphere_vertices, device=target_device, dtype=torch.float32
         )
         if sphere.shape != sphere_vertices.shape:
-            raise ValueError("unit_sphere_vertices 必须与 sphere_vertices 形状一致")
+            raise ValueError("unit_sphere_vertices must match sphere_vertices shape")
     points = sphere.to(dtype)
     x_coord = points[:, 0]
     y_coord = points[:, 1]
@@ -562,21 +544,16 @@ def apply_flow_to_sphere(
     row = row.expand(ny, nx)
     column = column.expand(ny, nx)
     weight = torch.sin(((row + 0.5) / float(ny)) * torch.pi)
-    u_deformation = _wrap_displacement(
-        (deformation[0] - column - 1.0) / float(nx)
-    ) * weight
-    # 官方 C 实现对两个分量都先做周期折返，再乘投影面积权重。
-    v_deformation = _wrap_displacement(
-        (deformation[1] - row - 1.0) / float(ny)
-    ) * weight
+    u_deformation = (
+        _wrap_displacement((deformation[0] - column - 1.0) / float(nx)) * weight
+    )
+    v_deformation = (
+        _wrap_displacement((deformation[1] - row - 1.0) / float(ny)) * weight
+    )
     x = u * float(nx) - 0.5
     y = v * float(ny) - 0.5
-    sampled_u = sample_field(
-        u_deformation, x, y, device=target_device, dtype=dtype
-    )
-    sampled_v = sample_field(
-        v_deformation, x, y, device=target_device, dtype=dtype
-    )
+    sampled_u = sample_field(u_deformation, x, y, device=target_device, dtype=dtype)
+    sampled_v = sample_field(v_deformation, x, y, device=target_device, dtype=dtype)
     if inverse:
         sampled_u = -sampled_u
         sampled_v = -sampled_v
@@ -616,12 +593,7 @@ def apply_flow_to_stenciled_sphere(
     device: str | torch.device = "auto",
     dtype: torch.dtype = torch.float64,
 ) -> torch.Tensor:
-    """使用 stencil 中缓存的精确单位球面点完成最终 GPU warp。
-
-    单位球面点由官方 C 的 ``map_point_to_unit_sphere`` 在 CPU 端一次生
-    成，随后与 flow 一起留在目标设备，避免最终阶段再次做不规则三角形
-    定位。
-    """
+    """Apply flow to stenciled sphere."""
 
     target_device = resolve_device(device)
     device_stencil = (
@@ -630,9 +602,11 @@ def apply_flow_to_stenciled_sphere(
         else stencil
     )
     if device_stencil.sphere_points.device != target_device:
-        raise ValueError("stencil 必须已经位于请求设备")
+        raise ValueError("stencil must be on the requested device")
     if device_stencil.unit_sphere_points is None:
-        raise ValueError("stencil 缺少 apply_warp 所需的 unit_sphere_points")
+        raise ValueError(
+            "stencil does not contain unit-sphere points required by apply_warp"
+        )
     return apply_flow_to_sphere(
         sphere_vertices,
         flow,

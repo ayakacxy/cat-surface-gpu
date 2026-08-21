@@ -1,4 +1,4 @@
-"""最新版 CAT-Surface 的 CAT_Surf2Sphere GPU 面积平滑后端。"""
+"""Ordered CUDA acceleration for the current CAT_Surf2Sphere algorithm."""
 
 # SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -24,7 +24,7 @@ from .surface_stencil import (
 try:
     import triton
     import triton.language as tl
-except ImportError:  # pragma: no cover - 由运行环境决定
+except ImportError:  # Triton is an optional runtime dependency.
     triton = None
     tl = None
 
@@ -44,7 +44,7 @@ if triton is not None:
         use_cat_mixed: tl.constexpr,
         BLOCK: tl.constexpr,
     ):
-        """融合一个独立顶点组的入射三角形面积和坐标更新。"""
+        """Areal smoothing kernel."""
 
         local = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
         active = local < n_group
@@ -55,12 +55,12 @@ if triton is not None:
             old_x = tl.load(points_ptr + vertex * 3, mask=active, other=0.0).to(
                 tl.float64
             )
-            old_y = tl.load(
-                points_ptr + vertex * 3 + 1, mask=active, other=0.0
-            ).to(tl.float64)
-            old_z = tl.load(
-                points_ptr + vertex * 3 + 2, mask=active, other=0.0
-            ).to(tl.float64)
+            old_y = tl.load(points_ptr + vertex * 3 + 1, mask=active, other=0.0).to(
+                tl.float64
+            )
+            old_z = tl.load(points_ptr + vertex * 3 + 2, mask=active, other=0.0).to(
+                tl.float64
+            )
             total_area = tl.zeros((BLOCK,), dtype=tl.float64)
             weighted_x = tl.zeros((BLOCK,), dtype=tl.float64)
             weighted_y = tl.zeros((BLOCK,), dtype=tl.float64)
@@ -69,12 +69,12 @@ if triton is not None:
             old_x = tl.load(points_ptr + vertex * 3, mask=active, other=0.0).to(
                 tl.float64
             )
-            old_y = tl.load(
-                points_ptr + vertex * 3 + 1, mask=active, other=0.0
-            ).to(tl.float64)
-            old_z = tl.load(
-                points_ptr + vertex * 3 + 2, mask=active, other=0.0
-            ).to(tl.float64)
+            old_y = tl.load(points_ptr + vertex * 3 + 1, mask=active, other=0.0).to(
+                tl.float64
+            )
+            old_z = tl.load(points_ptr + vertex * 3 + 2, mask=active, other=0.0).to(
+                tl.float64
+            )
             total_area = tl.zeros((BLOCK,), dtype=tl.float64)
             weighted_x = tl.zeros((BLOCK,), dtype=tl.float64)
             weighted_y = tl.zeros((BLOCK,), dtype=tl.float64)
@@ -83,12 +83,12 @@ if triton is not None:
             old_x = tl.load(points_ptr + vertex * 3, mask=active, other=0.0).to(
                 tl.float32
             )
-            old_y = tl.load(
-                points_ptr + vertex * 3 + 1, mask=active, other=0.0
-            ).to(tl.float32)
-            old_z = tl.load(
-                points_ptr + vertex * 3 + 2, mask=active, other=0.0
-            ).to(tl.float32)
+            old_y = tl.load(points_ptr + vertex * 3 + 1, mask=active, other=0.0).to(
+                tl.float32
+            )
+            old_z = tl.load(points_ptr + vertex * 3 + 2, mask=active, other=0.0).to(
+                tl.float32
+            )
             total_area = tl.zeros((BLOCK,), dtype=tl.float32)
             weighted_x = tl.zeros((BLOCK,), dtype=tl.float32)
             weighted_y = tl.zeros((BLOCK,), dtype=tl.float32)
@@ -120,33 +120,33 @@ if triton is not None:
             ).to(tl.int64)
 
             if use_cat_mixed:
-                p0x = tl.load(
-                    points_ptr + vertex0 * 3, mask=valid, other=0.0
-                ).to(tl.float32)
-                p0y = tl.load(
-                    points_ptr + vertex0 * 3 + 1, mask=valid, other=0.0
-                ).to(tl.float32)
-                p0z = tl.load(
-                    points_ptr + vertex0 * 3 + 2, mask=valid, other=0.0
-                ).to(tl.float32)
-                p1x = tl.load(
-                    points_ptr + vertex1 * 3, mask=valid, other=0.0
-                ).to(tl.float32)
-                p1y = tl.load(
-                    points_ptr + vertex1 * 3 + 1, mask=valid, other=0.0
-                ).to(tl.float32)
-                p1z = tl.load(
-                    points_ptr + vertex1 * 3 + 2, mask=valid, other=0.0
-                ).to(tl.float32)
-                p2x = tl.load(
-                    points_ptr + vertex2 * 3, mask=valid, other=0.0
-                ).to(tl.float32)
-                p2y = tl.load(
-                    points_ptr + vertex2 * 3 + 1, mask=valid, other=0.0
-                ).to(tl.float32)
-                p2z = tl.load(
-                    points_ptr + vertex2 * 3 + 2, mask=valid, other=0.0
-                ).to(tl.float32)
+                p0x = tl.load(points_ptr + vertex0 * 3, mask=valid, other=0.0).to(
+                    tl.float32
+                )
+                p0y = tl.load(points_ptr + vertex0 * 3 + 1, mask=valid, other=0.0).to(
+                    tl.float32
+                )
+                p0z = tl.load(points_ptr + vertex0 * 3 + 2, mask=valid, other=0.0).to(
+                    tl.float32
+                )
+                p1x = tl.load(points_ptr + vertex1 * 3, mask=valid, other=0.0).to(
+                    tl.float32
+                )
+                p1y = tl.load(points_ptr + vertex1 * 3 + 1, mask=valid, other=0.0).to(
+                    tl.float32
+                )
+                p1z = tl.load(points_ptr + vertex1 * 3 + 2, mask=valid, other=0.0).to(
+                    tl.float32
+                )
+                p2x = tl.load(points_ptr + vertex2 * 3, mask=valid, other=0.0).to(
+                    tl.float32
+                )
+                p2y = tl.load(points_ptr + vertex2 * 3 + 1, mask=valid, other=0.0).to(
+                    tl.float32
+                )
+                p2z = tl.load(points_ptr + vertex2 * 3 + 2, mask=valid, other=0.0).to(
+                    tl.float32
+                )
             else:
                 p0x = tl.load(points_ptr + vertex0 * 3, mask=valid, other=0.0)
                 p0y = tl.load(points_ptr + vertex0 * 3 + 1, mask=valid, other=0.0)
@@ -168,31 +168,21 @@ if triton is not None:
             cross_z = edge0x * edge1y - edge0y * edge1x
             if use_cat_mixed:
                 area_square = (
-                    cross_x * cross_x
-                    + cross_y * cross_y
-                    + cross_z * cross_z
+                    cross_x * cross_x + cross_y * cross_y + cross_z * cross_z
                 ).to(tl.float64)
                 area = 0.5 * tl.sqrt(area_square)
                 center_x = (
-                    p0x.to(tl.float64)
-                    + p1x.to(tl.float64)
-                    + p2x.to(tl.float64)
+                    p0x.to(tl.float64) + p1x.to(tl.float64) + p2x.to(tl.float64)
                 ) / 3.0
                 center_y = (
-                    p0y.to(tl.float64)
-                    + p1y.to(tl.float64)
-                    + p2y.to(tl.float64)
+                    p0y.to(tl.float64) + p1y.to(tl.float64) + p2y.to(tl.float64)
                 ) / 3.0
                 center_z = (
-                    p0z.to(tl.float64)
-                    + p1z.to(tl.float64)
-                    + p2z.to(tl.float64)
+                    p0z.to(tl.float64) + p1z.to(tl.float64) + p2z.to(tl.float64)
                 ) / 3.0
             else:
                 area = 0.5 * tl.sqrt(
-                    cross_x * cross_x
-                    + cross_y * cross_y
-                    + cross_z * cross_z
+                    cross_x * cross_x + cross_y * cross_y + cross_z * cross_z
                 )
                 center_x = (p0x + p1x + p2x) / 3.0
                 center_y = (p0y + p1y + p2y) / 3.0
@@ -237,14 +227,12 @@ if triton is not None:
         use_cat_mixed: tl.constexpr,
         BLOCK: tl.constexpr,
     ):
-        """把所有顶点投影回面积平滑使用的固定半径。"""
+        """Normalize points kernel."""
 
         index = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
         active = index < n_points
         if use_cat_mixed:
-            x = tl.load(points_ptr + index * 3, mask=active, other=0.0).to(
-                tl.float32
-            )
+            x = tl.load(points_ptr + index * 3, mask=active, other=0.0).to(tl.float32)
             y = tl.load(points_ptr + index * 3 + 1, mask=active, other=0.0).to(
                 tl.float32
             )
@@ -270,9 +258,7 @@ if triton is not None:
                 mask=active,
             )
         elif use_fp64:
-            x = tl.load(points_ptr + index * 3, mask=active, other=0.0).to(
-                tl.float64
-            )
+            x = tl.load(points_ptr + index * 3, mask=active, other=0.0).to(tl.float64)
             y = tl.load(points_ptr + index * 3 + 1, mask=active, other=0.0).to(
                 tl.float64
             )
@@ -280,9 +266,7 @@ if triton is not None:
                 tl.float64
             )
         else:
-            x = tl.load(points_ptr + index * 3, mask=active, other=0.0).to(
-                tl.float32
-            )
+            x = tl.load(points_ptr + index * 3, mask=active, other=0.0).to(tl.float32)
             y = tl.load(points_ptr + index * 3 + 1, mask=active, other=0.0).to(
                 tl.float32
             )
@@ -310,7 +294,7 @@ if triton is not None:
         use_fp64: tl.constexpr,
         BLOCK: tl.constexpr,
     ):
-        """融合一个独立顶点组的 Manhattan 距离平滑更新。"""
+        """Distance smoothing kernel."""
 
         local = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
         active = local < n_group
@@ -322,12 +306,12 @@ if triton is not None:
             old_x = tl.load(points_ptr + vertex * 3, mask=active, other=0.0).to(
                 tl.float64
             )
-            old_y = tl.load(
-                points_ptr + vertex * 3 + 1, mask=active, other=0.0
-            ).to(tl.float64)
-            old_z = tl.load(
-                points_ptr + vertex * 3 + 2, mask=active, other=0.0
-            ).to(tl.float64)
+            old_y = tl.load(points_ptr + vertex * 3 + 1, mask=active, other=0.0).to(
+                tl.float64
+            )
+            old_z = tl.load(points_ptr + vertex * 3 + 2, mask=active, other=0.0).to(
+                tl.float64
+            )
             total_distance = tl.zeros((BLOCK,), dtype=tl.float64)
             weighted_x = tl.zeros((BLOCK,), dtype=tl.float64)
             weighted_y = tl.zeros((BLOCK,), dtype=tl.float64)
@@ -336,12 +320,12 @@ if triton is not None:
             old_x = tl.load(points_ptr + vertex * 3, mask=active, other=0.0).to(
                 tl.float32
             )
-            old_y = tl.load(
-                points_ptr + vertex * 3 + 1, mask=active, other=0.0
-            ).to(tl.float32)
-            old_z = tl.load(
-                points_ptr + vertex * 3 + 2, mask=active, other=0.0
-            ).to(tl.float32)
+            old_y = tl.load(points_ptr + vertex * 3 + 1, mask=active, other=0.0).to(
+                tl.float32
+            )
+            old_z = tl.load(points_ptr + vertex * 3 + 2, mask=active, other=0.0).to(
+                tl.float32
+            )
             total_distance = tl.zeros((BLOCK,), dtype=tl.float32)
             weighted_x = tl.zeros((BLOCK,), dtype=tl.float32)
             weighted_y = tl.zeros((BLOCK,), dtype=tl.float32)
@@ -386,16 +370,9 @@ if triton is not None:
             weighted_z += tl.where(positive, distance * neighbour_z, 0.0)
 
         safe_distance = tl.maximum(total_distance, 1.0e-30)
-        candidate_x = old_x * inv_strength + (
-            weighted_x / safe_distance
-        ) * strength
-        candidate_y = old_y * inv_strength + (
-            weighted_y / safe_distance
-        ) * strength
-        candidate_z = old_z * inv_strength + (
-            weighted_z / safe_distance
-        ) * strength
-        # 与上游一致：所有邻居距离为零时，距离加权和为零而不是静默保留原点。
+        candidate_x = old_x * inv_strength + (weighted_x / safe_distance) * strength
+        candidate_y = old_y * inv_strength + (weighted_y / safe_distance) * strength
+        candidate_z = old_z * inv_strength + (weighted_z / safe_distance) * strength
         candidate_x = tl.where(total_distance > 0.0, candidate_x, old_x * inv_strength)
         candidate_y = tl.where(total_distance > 0.0, candidate_y, old_y * inv_strength)
         candidate_z = tl.where(total_distance > 0.0, candidate_z, old_z * inv_strength)
@@ -422,7 +399,7 @@ if triton is not None:
 
 @dataclass(frozen=True)
 class Surf2SphereTopology:
-    """保存面积平滑所需的入射三角形表和独立顶点分组。"""
+    """Store reusable triangle incidence, neighbors, and dependency groups."""
 
     incident_faces: np.ndarray
     incident_mask: np.ndarray
@@ -433,7 +410,7 @@ class Surf2SphereTopology:
 
     @classmethod
     def from_mesh(cls, mesh: GiftiMesh) -> "Surf2SphereTopology":
-        """根据三角形拓扑建立一次性、可复用的 GPU 索引。"""
+        """From mesh."""
 
         faces = np.ascontiguousarray(mesh.faces, dtype=np.int64)
         n_points = int(mesh.vertices.shape[0])
@@ -447,12 +424,8 @@ class Surf2SphereTopology:
         sorted_faces = face_ids[order]
         counts = np.bincount(sorted_vertices, minlength=n_points)
         max_incident = max(1, int(counts.max()))
-        incident_faces = np.zeros(
-            (n_points, max_incident), dtype=np.int64
-        )
-        incident_mask = np.zeros(
-            (n_points, max_incident), dtype=bool
-        )
+        incident_faces = np.zeros((n_points, max_incident), dtype=np.int64)
+        incident_mask = np.zeros((n_points, max_incident), dtype=bool)
         offsets = np.concatenate(([0], np.cumsum(counts)))
         for vertex in range(n_points):
             start = int(offsets[vertex])
@@ -464,9 +437,7 @@ class Surf2SphereTopology:
 
         neighbours, neighbour_mask = _build_neighbour_table(faces, n_points)
         color_groups = _build_color_groups(neighbours, neighbour_mask)
-        ordered_groups = _build_ordered_dependency_groups(
-            neighbours, neighbour_mask
-        )
+        ordered_groups = _build_ordered_dependency_groups(neighbours, neighbour_mask)
         return cls(
             incident_faces=incident_faces,
             incident_mask=incident_mask,
@@ -479,7 +450,7 @@ class Surf2SphereTopology:
 
 @dataclass(frozen=True)
 class CatSurf2SphereGpuResult:
-    """保存一次 CAT_Surf2Sphere GPU 运行的输出和阶段计时。"""
+    """Store the generated sphere path and synchronized stage timings."""
 
     vertices: np.ndarray
     faces: np.ndarray
@@ -488,7 +459,7 @@ class CatSurf2SphereGpuResult:
 
 
 def surface_area(mesh: GiftiMesh) -> float:
-    """用最新版 CAT 的三角形面积公式计算输入表面积。"""
+    """Compute total surface area with the current CAT triangle formula."""
 
     vertices = mesh.vertices.astype(np.float64, copy=False)
     faces = mesh.faces.astype(np.int64, copy=False)
@@ -504,14 +475,13 @@ def _face_areas_and_vertex_areas(
     points: torch.Tensor,
     faces: torch.Tensor,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """在设备上计算三角形面积和等分到顶点的面积。"""
+    """Face areas and vertex areas."""
 
     triangles = points[faces]
     edge0 = triangles[:, 1] - triangles[:, 0]
     edge1 = triangles[:, 2] - triangles[:, 0]
     cross = torch.linalg.cross(edge0, edge1)
     areas = 0.5 * torch.sqrt(torch.sum(cross * cross, dim=1))
-    # 上游只把 NaN 面积改为零；正常表面不会产生无穷面积。
     areas = torch.where(torch.isnan(areas), torch.zeros_like(areas), areas)
     vertex_areas = torch.zeros(
         points.shape[0], dtype=points.dtype, device=points.device
@@ -532,16 +502,14 @@ def _run_distance_smoothing_cuda(
     strength: float,
     selected: torch.Tensor | None = None,
 ) -> float:
-    """在 CUDA 上按图着色执行最新版 CAT 的距离平滑。"""
+    """Run distance smoothing cuda."""
 
     if triton is None:
-        raise RuntimeError("请求了 CAT_Surf2Sphere Triton kernel，但 Triton 不可用")
+        raise RuntimeError("CAT_Surf2Sphere Triton kernel, but Triton is unavailable")
     if iterations < 1:
-        raise ValueError("距离平滑迭代次数必须大于等于 1")
+        raise ValueError("Must be at least 1")
     if selected is None:
-        selected = torch.ones(
-            points.shape[0], dtype=torch.int8, device=points.device
-        )
+        selected = torch.ones(points.shape[0], dtype=torch.int8, device=points.device)
         use_subset = False
     else:
         selected = selected.to(device=points.device, dtype=torch.int8)
@@ -579,13 +547,13 @@ def _make_ordered_preprocess_groups(
     target: torch.device,
     block_size: int | None,
 ) -> tuple[torch.Tensor, ...]:
-    """按顶点编号分块后保留图着色，减少 Gauss–Seidel 调度重排。"""
+    """Make ordered preprocess groups."""
 
     if block_size is None or block_size >= n_points:
         groups = color_groups
     else:
         if block_size < 1:
-            raise ValueError("前处理顶点分块大小必须为正数")
+            raise ValueError("preprocess vertex block size must be positive")
         groups_list: list[np.ndarray] = []
         for start in range(0, n_points, block_size):
             stop = min(n_points, start + block_size)
@@ -595,8 +563,7 @@ def _make_ordered_preprocess_groups(
                     groups_list.append(selected)
         groups = tuple(groups_list)
     return tuple(
-        torch.as_tensor(group, dtype=torch.int32, device=target)
-        for group in groups
+        torch.as_tensor(group, dtype=torch.int32, device=target) for group in groups
     )
 
 
@@ -612,17 +579,14 @@ def _compute_distortion_selection(
     reference_surface_area: torch.Tensor,
     threshold: float,
 ) -> torch.Tensor:
-    """计算最新版 CAT 的局部压缩/拉伸判据并返回顶点选择掩码。"""
+    """Compute distortion selection."""
 
-    # 上游将这些诊断数组存为 float，因此这里也在判据边界显式使用 FP32。
     current_neighbours = points[neighbours]
     reference_neighbours = reference[neighbours]
     current_delta = current_neighbours - points[:, None, :]
     reference_delta = reference_neighbours - reference[:, None, :]
     current_distance = torch.sqrt(torch.sum(current_delta * current_delta, dim=2))
-    reference_distance = torch.sqrt(
-        torch.sum(reference_delta * reference_delta, dim=2)
-    )
+    reference_distance = torch.sqrt(torch.sum(reference_delta * reference_delta, dim=2))
     finite_reference = neighbour_mask & (reference_distance > 0.0)
     linear_ratio = torch.where(
         finite_reference,
@@ -654,7 +618,6 @@ def _compute_distortion_selection(
     average_comp = (comp_stretch + neighbour_comp.sum(dim=1)) / (
         degree.to(torch.float32) + 1.0
     )
-    # 度为零时上游的 compStretch 本身为零；保留同样的判定语义。
     return (average_comp > float(threshold)).to(torch.int8)
 
 
@@ -675,7 +638,7 @@ def _run_inflate_surface_stage_cuda(
     finger_strength: float,
     finger_iterations: int,
 ) -> float:
-    """在 CUDA 上执行一个完整的 CAT 膨胀、诊断和手指平滑阶段。"""
+    """Run inflate surface stage cuda."""
 
     stage_start = time.perf_counter()
     reference = points.clone()
@@ -745,16 +708,16 @@ def run_surf2sphere_preprocess_cuda(
     dtype: str | torch.dtype = torch.float32,
     schedule_block_size: int | None = 131072,
 ) -> tuple[np.ndarray, dict[str, float]]:
-    """把最新版 CAT_Surf2Sphere 的前五阶段显式执行在 CUDA 上。"""
+    """Run surf2sphere preprocess cuda."""
 
     target = _resolve_device(device)
     geometry_dtype = _resolve_dtype(dtype)
     if target.type != "cuda":
-        raise ValueError("当前 CAT_Surf2Sphere 前处理后端只接受 CUDA 设备")
+        raise ValueError("The CAT_Surf2Sphere preprocessing backend requires CUDA")
     if triton is None:
-        raise RuntimeError("请求了 CAT_Surf2Sphere Triton kernel，但 Triton 不可用")
+        raise RuntimeError("CAT_Surf2Sphere Triton kernel, but Triton is unavailable")
     if stop_at < 1 or stop_at > 5:
-        raise ValueError("CUDA 前处理的 stop_at 必须在 1 到 5 之间")
+        raise ValueError("CUDA preprocessing stop_at must be between 1 and 5")
 
     with torch.no_grad():
         points = torch.as_tensor(
@@ -784,10 +747,13 @@ def run_surf2sphere_preprocess_cuda(
             schedule_block_size,
         )
         n_faces = int(faces.shape[0])
-        factor = (
-            float(n_faces) / 350000.0 if n_faces > 350000 else 1.0
-        )
-        regular_iterations = lambda value: int(round(factor * value))
+        factor = float(n_faces) / 350000.0 if n_faces > 350000 else 1.0
+
+        def regular_iterations(value: int) -> int:
+            """Scale upstream preprocessing iterations for full-resolution meshes."""
+
+            return int(round(factor * value))
+
         timings: dict[str, float] = {}
         stages = (
             (
@@ -848,7 +814,17 @@ def run_surf2sphere_preprocess_cuda(
         )
         torch.cuda.synchronize(target)
         total_start = time.perf_counter()
-        for stage_index, name, cycles, strength, iterations, inflation, threshold, finger_strength, finger_iters in stages:
+        for (
+            stage_index,
+            name,
+            cycles,
+            strength,
+            iterations,
+            inflation,
+            threshold,
+            finger_strength,
+            finger_iters,
+        ) in stages:
             if stage_index > stop_at:
                 break
             timings[f"{name}_seconds"] = _run_inflate_surface_stage_cuda(
@@ -887,19 +863,19 @@ def run_surf2sphere_preprocess_cuda(
 
 
 def _resolve_device(device: str | torch.device) -> torch.device:
-    """解析设备并拒绝不可用的 CUDA 后端。"""
+    """Resolve device."""
 
     target = torch.device(device)
     if target.type == "cuda":
         if not torch.cuda.is_available():
-            raise RuntimeError("请求了 CAT_Surf2Sphere CUDA 后端，但 CUDA 不可用")
+            raise RuntimeError("CAT_Surf2Sphere CUDA backend , but CUDA is unavailable")
         if target.index is None:
             target = torch.device("cuda", torch.cuda.current_device())
     return target
 
 
 def _resolve_dtype(dtype: str | torch.dtype) -> torch.dtype:
-    """解析显式面积平滑精度，不启用隐式 autocast。"""
+    """Resolve dtype."""
 
     if isinstance(dtype, torch.dtype):
         result = dtype
@@ -914,9 +890,9 @@ def _resolve_dtype(dtype: str | torch.dtype) -> torch.dtype:
         try:
             result = mapping[normalized]
         except KeyError as exc:
-            raise ValueError(f"不支持的 CAT_Surf2Sphere 精度: {dtype}") from exc
+            raise ValueError(f"Unsupported CAT_Surf2Sphere dtype: {dtype}") from exc
     if result not in (torch.float32, torch.float64):
-        raise ValueError(f"CAT_Surf2Sphere 只支持 FP32/FP64: {result}")
+        raise ValueError(f"CAT_Surf2Sphere supports only FP32 and FP64, got {result}")
     return result
 
 
@@ -925,7 +901,7 @@ def _write_vertices_like(
     output_path: str | Path,
     vertices: np.ndarray,
 ) -> None:
-    """替换参考 GIFTI 的顶点数组并保留其余元数据和拓扑。"""
+    """Replace GIFTI vertices while preserving topology and metadata."""
 
     import copy
 
@@ -933,7 +909,7 @@ def _write_vertices_like(
 
     image = copy.deepcopy(nib.load(str(reference_path)))
     if not image.darrays:
-        raise ValueError(f"参考 GIFTI 没有数据数组: {reference_path}")
+        raise ValueError(f"GIFTI array : {reference_path}")
     image.darrays[0].data = np.ascontiguousarray(vertices, dtype=np.float32)
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -944,7 +920,7 @@ def convert_ellipsoid_to_sphere_with_surface_area(
     vertices: np.ndarray,
     desired_surface_area: float,
 ) -> np.ndarray:
-    """复现最新版 CAT 的椭球到球面投影和目标面积半径。"""
+    """Convert ellipsoid to sphere with surface area."""
 
     geometry = np.ascontiguousarray(vertices, dtype=np.float32)
     radius = math.sqrt(desired_surface_area / (4.0 * math.pi))
@@ -976,25 +952,25 @@ def run_areal_smoothing_cuda(
     arithmetic: str = "cat",
     schedule_block_size: int | None = None,
 ) -> tuple[np.ndarray, dict[str, float]]:
-    """用保持官方依赖顺序的并行层级执行面积平滑迭代。"""
+    """Run every CAT area-smoothing sweep on CUDA in dependency order."""
 
     target = _resolve_device(device)
     geometry_dtype = _resolve_dtype(dtype)
     if target.type != "cuda":
-        raise ValueError("当前 CAT_Surf2Sphere 优化后端只接受 CUDA 设备")
+        raise ValueError("The optimized CAT_Surf2Sphere backend requires CUDA")
     if kernel not in ("torch", "triton"):
-        raise ValueError(f"不支持的 CAT_Surf2Sphere kernel: {kernel}")
+        raise ValueError(f"Unsupported CAT_Surf2Sphere kernel: {kernel}")
     if schedule not in ("ordered", "color"):
-        raise ValueError(f"不支持的 CAT_Surf2Sphere schedule: {schedule}")
+        raise ValueError(f"Unsupported CAT_Surf2Sphere schedule: {schedule}")
     if arithmetic not in ("cat", "fp32"):
-        raise ValueError(f"不支持的 CAT_Surf2Sphere arithmetic: {arithmetic}")
+        raise ValueError(f"Unsupported CAT_Surf2Sphere arithmetic: {arithmetic}")
     if kernel == "triton" and triton is None:
-        raise RuntimeError("请求了 CAT_Surf2Sphere Triton kernel，但 Triton 不可用")
+        raise RuntimeError("CAT_Surf2Sphere Triton kernel, but Triton is unavailable")
     use_cat_mixed = arithmetic == "cat" and geometry_dtype == torch.float32
     if iterations < 1:
-        raise ValueError("面积平滑迭代次数必须大于等于 1")
+        raise ValueError("Must be at least 1")
     if project_every < 0:
-        raise ValueError("球面投影周期不能为负数")
+        raise ValueError("sphere projection period must be non-negative")
 
     with torch.no_grad():
         points = torch.as_tensor(
@@ -1019,7 +995,6 @@ def run_areal_smoothing_cuda(
                 device=target,
             )
             if schedule == "ordered":
-                # 同层顶点没有相邻关系，层间顺序等价于官方原地循环。
                 color_groups = tuple(
                     torch.as_tensor(group, dtype=torch.int32, device=target)
                     for group in topology.ordered_groups
@@ -1058,9 +1033,7 @@ def run_areal_smoothing_cuda(
                 torch.as_tensor(group, dtype=torch.long, device=target)
                 for group in groups
             )
-        radius_tensor = torch.as_tensor(
-            radius, dtype=geometry_dtype, device=target
-        )
+        radius_tensor = torch.as_tensor(radius, dtype=geometry_dtype, device=target)
         torch.cuda.synchronize(target)
         start = time.perf_counter()
         for iteration in range(1, iterations):
@@ -1091,19 +1064,14 @@ def run_areal_smoothing_cuda(
                     areas = torch.clamp(areas, min=0.0, max=1.0)
                     areas = areas * incident_mask[group]
                     centers = (
-                        triangle[:, :, 0]
-                        + triangle[:, :, 1]
-                        + triangle[:, :, 2]
+                        triangle[:, :, 0] + triangle[:, :, 1] + triangle[:, :, 2]
                     ) / 3.0
                     total_area = areas.sum(dim=1)
-                    candidate = (
-                        (areas[:, :, None] * centers).sum(dim=1)
-                        / total_area.clamp_min(1.0e-20)[:, None]
-                    )
+                    candidate = (areas[:, :, None] * centers).sum(
+                        dim=1
+                    ) / total_area.clamp_min(1.0e-20)[:, None]
                     old = points[group]
-                    candidate = torch.where(
-                        (total_area > 0.0)[:, None], candidate, old
-                    )
+                    candidate = torch.where((total_area > 0.0)[:, None], candidate, old)
                     points.index_copy_(0, group, candidate)
 
             if project_every > 0 and iteration % project_every == 0:
@@ -1151,16 +1119,16 @@ def run_cat_surf2sphere_gpu(
     areal_arithmetic: str = "cat",
     areal_block_size: int | None = None,
 ) -> CatSurf2SphereGpuResult:
-    """运行最新版 CAT_Surf2Sphere 的显式 CPU/GPU 组合路径。"""
+    """Run the explicit upstream-CPU/CUDA CAT_Surf2Sphere hybrid path."""
 
     if stop_at < 1:
-        raise ValueError("stop_at 必须大于等于 1")
+        raise ValueError("stop_at must be at least 1")
     input_path = Path(input_surface)
     output_path = Path(output_surface)
     reference_path = Path(reference_cli)
     if preprocess_kernel not in ("cpu", "triton"):
         raise ValueError(
-            f"不支持的 CAT_Surf2Sphere preprocess kernel: {preprocess_kernel}"
+            f"Unsupported CAT_Surf2Sphere preprocess kernel: {preprocess_kernel}"
         )
     timings: dict[str, float] = {}
     total_start = time.perf_counter()
@@ -1215,9 +1183,7 @@ def run_cat_surf2sphere_gpu(
             smoothed,
             surface_area(input_mesh),
         )
-        timings["ellipsoid_to_sphere_seconds"] = (
-            time.perf_counter() - conversion_start
-        )
+        timings["ellipsoid_to_sphere_seconds"] = time.perf_counter() - conversion_start
         write_start = time.perf_counter()
         _write_vertices_like(input_path, output_path, converted)
         timings["output_write_seconds"] = time.perf_counter() - write_start
@@ -1247,8 +1213,7 @@ def run_cat_surf2sphere_gpu(
         timings["reference_prefix_seconds"] = time.perf_counter() - start
         if completed.returncode != 0:
             raise RuntimeError(
-                "CAT_Surf2Sphere CPU 前置失败:\n"
-                + completed.stderr[-4000:]
+                "CAT_Surf2Sphere CPU preprocessing failed:\n" + completed.stderr[-4000:]
             )
         mesh = read_gifti_mesh(output_path)
         timings["total_seconds"] = time.perf_counter() - total_start
@@ -1277,8 +1242,7 @@ def run_cat_surf2sphere_gpu(
         timings["reference_prefix_seconds"] = time.perf_counter() - start
         if completed.returncode != 0:
             raise RuntimeError(
-                "CAT_Surf2Sphere CPU 前置失败:\n"
-                + completed.stderr[-4000:]
+                "CAT_Surf2Sphere CPU preprocessing failed:\n" + completed.stderr[-4000:]
             )
 
         prefix_mesh = read_gifti_mesh(prefix_path)
@@ -1316,9 +1280,7 @@ def run_cat_surf2sphere_gpu(
             smoothed,
             surface_area(source_mesh),
         )
-        timings["ellipsoid_to_sphere_seconds"] = (
-            time.perf_counter() - conversion_start
-        )
+        timings["ellipsoid_to_sphere_seconds"] = time.perf_counter() - conversion_start
         write_start = time.perf_counter()
         _write_vertices_like(prefix_path, output_path, converted)
         timings["output_write_seconds"] = time.perf_counter() - write_start

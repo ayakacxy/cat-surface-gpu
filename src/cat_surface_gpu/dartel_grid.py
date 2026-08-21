@@ -1,10 +1,4 @@
-"""CAT-Surface DARTEL 规则网格算子的 Torch 实现。
-
-内部张量采用 ``[component, y, x]`` 布局，最后一维对应 C 实现中连续的 x
-索引。坐标图沿用 CAT-Surface 的一基坐标约定，位移场则以零为单位图上的
-位移。所有算子都接收显式设备；``auto`` 只是明确请求自动选择，不会在
-显式请求 CUDA 失败时静默切换到 CPU。
-"""
+"""Torch implementation of CAT-Surface's two-dimensional DARTEL operators."""
 
 # SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -26,67 +20,69 @@ def _grid_periods(
     device: torch.device,
     dtype: torch.dtype,
 ) -> torch.Tensor:
-    """返回指定网格上可复用的周期长度张量。"""
+    """Grid periods."""
 
     key = (device.type, device.index, dtype, spec.nx, spec.ny)
     cached = _GRID_PERIOD_CACHE.get(key)
     if cached is None:
-        cached = torch.tensor(
-            (spec.nx, spec.ny), dtype=dtype, device=device
-        ).view(2, 1, 1)
+        cached = torch.tensor((spec.nx, spec.ny), dtype=dtype, device=device).view(
+            2, 1, 1
+        )
         _GRID_PERIOD_CACHE[key] = cached
     return cached
 
 
 class DeviceUnavailable(RuntimeError):
-    """表示请求的 Torch 设备当前不可用。"""
+    """Report that an explicitly requested Torch device is unavailable."""
 
 
 @dataclass(frozen=True)
 class GridSpec:
-    """描述 DARTEL 二维网格的 x、y 尺寸。"""
+    """Describe the x and y dimensions of a DARTEL grid."""
 
     nx: int
     ny: int
 
     def __post_init__(self) -> None:
         if self.nx < 1 or self.ny < 1:
-            raise ValueError(f"网格尺寸必须为正数，得到 {(self.nx, self.ny)}")
+            raise ValueError(
+                f"Grid dimensions must be positive, got {(self.nx, self.ny)}"
+            )
 
     @property
     def points(self) -> int:
-        """返回网格点数。"""
+        """Return the total number of grid points."""
 
         return self.nx * self.ny
 
     @classmethod
     def from_shape(cls, shape: Sequence[int]) -> "GridSpec":
-        """从 ``[component, y, x]`` 形状创建网格描述。"""
+        """Create a grid specification from shape [2, ny, nx]."""
 
         if len(shape) != 3 or shape[0] != 2:
-            raise ValueError(f"网格形状必须是 [2, ny, nx]，得到 {tuple(shape)}")
+            raise ValueError(f"Grid shape must be [2, ny, nx], got {tuple(shape)}")
         return cls(nx=int(shape[2]), ny=int(shape[1]))
 
 
 def resolve_device(device: str | torch.device = "auto") -> torch.device:
-    """解析显式 Torch 设备并检查 CUDA 是否真正可用。"""
+    """Resolve an explicit CPU/CUDA device and reject unavailable CUDA."""
 
     if isinstance(device, str) and device == "auto":
         return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     resolved = torch.device(device)
     if resolved.type not in {"cpu", "cuda"}:
-        raise DeviceUnavailable(f"DARTEL 网格后端只支持 CPU/CUDA，得到 {resolved}")
+        raise DeviceUnavailable(
+            f"DARTEL supports only CPU and CUDA devices, got {resolved}"
+        )
     if resolved.type == "cuda":
         if not torch.cuda.is_available():
-            raise DeviceUnavailable("请求 CUDA，但当前 NVIDIA 驱动或设备不可用")
+            raise DeviceUnavailable("CUDA, but current NVIDIA or device is unavailable")
         if resolved.index is not None and resolved.index >= torch.cuda.device_count():
             raise DeviceUnavailable(
-                f"请求 CUDA 设备 {resolved.index}，可见设备数为 {torch.cuda.device_count()}"
+                f"CUDA device {resolved.index}, device {torch.cuda.device_count()}"
             )
         if resolved.index is None:
-            # 统一成带显式索引的设备，避免 ``cuda`` 与 ``cuda:0`` 比较时
-            # 被 Torch 视为不同对象，进而误判已上传的 stencil 所在设备。
             resolved = torch.device("cuda", torch.cuda.current_device())
     return resolved
 
@@ -98,12 +94,12 @@ def _as_grid(
     dtype: torch.dtype,
     name: str,
 ) -> torch.Tensor:
-    """把输入转换为连续的二维向量场张量。"""
+    """As grid."""
 
     tensor = torch.as_tensor(value, dtype=dtype, device=device)
     expected = (2, spec.ny, spec.nx)
     if tuple(tensor.shape) != expected:
-        raise ValueError(f"{name} 形状必须是 {expected}，得到 {tuple(tensor.shape)}")
+        raise ValueError(f"{name} shape must be {expected}, got {tuple(tensor.shape)}")
     return tensor.contiguous()
 
 
@@ -114,12 +110,12 @@ def _as_jacobian(
     dtype: torch.dtype,
     name: str,
 ) -> torch.Tensor:
-    """把输入转换为连续的四分量 Jacobian 张量。"""
+    """As jacobian."""
 
     tensor = torch.as_tensor(value, dtype=dtype, device=device)
     expected = (4, spec.ny, spec.nx)
     if tuple(tensor.shape) != expected:
-        raise ValueError(f"{name} 形状必须是 {expected}，得到 {tuple(tensor.shape)}")
+        raise ValueError(f"{name} shape must be {expected}, got {tuple(tensor.shape)}")
     return tensor.contiguous()
 
 
@@ -130,7 +126,7 @@ def _as_field(
     dtype: torch.dtype,
     name: str,
 ) -> torch.Tensor:
-    """把标量或多通道场转换为连续的 ``[channel, y, x]`` 张量。"""
+    """As field."""
 
     tensor = torch.as_tensor(value, dtype=dtype, device=device)
     if tensor.ndim == 2:
@@ -138,7 +134,7 @@ def _as_field(
     expected = (tensor.shape[0], spec.ny, spec.nx)
     if tensor.ndim != 3 or tuple(tensor.shape[1:]) != expected[1:]:
         raise ValueError(
-            f"{name} 形状必须是 [channel, {spec.ny}, {spec.nx}]，得到 {tuple(tensor.shape)}"
+            f"{name} shape must be [channel, {spec.ny}, {spec.nx}], got {tuple(tensor.shape)}"
         )
     return tensor.contiguous()
 
@@ -152,22 +148,26 @@ def from_c_layout(
     device: str | torch.device = "auto",
     dtype: torch.dtype = torch.float64,
 ) -> torch.Tensor:
-    """把 CAT C 的 ``[component * nx * ny]`` 布局转换为 Torch 布局。"""
+    """From c layout."""
 
     spec = GridSpec(nx=nx, ny=ny)
     target_device = resolve_device(device)
     tensor = torch.as_tensor(value, dtype=dtype, device=target_device)
     expected = components * spec.points
     if tensor.numel() != expected:
-        raise ValueError(f"C 布局元素数应为 {expected}，得到 {tensor.numel()}")
+        raise ValueError(
+            f"CAT C layout requires {expected} elements, got {tensor.numel()}"
+        )
     return tensor.reshape(components, spec.ny, spec.nx).contiguous()
 
 
 def to_c_layout(value: torch.Tensor) -> torch.Tensor:
-    """把 ``[component, y, x]`` 张量按 CAT C 的连续布局展平。"""
+    """To c layout."""
 
     if value.ndim != 3:
-        raise ValueError(f"输入必须是三维张量，得到 {tuple(value.shape)}")
+        raise ValueError(
+            f"Input must be a three-dimensional tensor, got {tuple(value.shape)}"
+        )
     return value.contiguous().reshape(-1)
 
 
@@ -177,7 +177,7 @@ def make_identity_map(
     device: str | torch.device = "auto",
     dtype: torch.dtype = torch.float64,
 ) -> torch.Tensor:
-    """构造 CAT-Surface 使用的一基坐标 identity map。"""
+    """Build CAT-Surface's one-based identity coordinate map."""
 
     target_device = resolve_device(device)
     x = torch.arange(1, spec.nx + 1, device=target_device, dtype=dtype)
@@ -192,7 +192,7 @@ def _bound_indices(
     iy: torch.Tensor,
     spec: GridSpec,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """实现 CAT 的 x 周期边界和 y 镜像 Neumann 边界。"""
+    """Bound indices."""
 
     x_index = torch.remainder(ix, spec.nx)
     if spec.ny == 1:
@@ -209,7 +209,7 @@ def _bound_indices(
 
 
 def _shift(field: torch.Tensor, dx: int, dy: int, spec: GridSpec) -> torch.Tensor:
-    """读取混合边界条件下的整数邻域。"""
+    """Shift."""
 
     shifted_x = torch.roll(field, shifts=-dx, dims=-1)
     y = torch.arange(spec.ny, device=field.device, dtype=torch.long) + dy
@@ -227,7 +227,7 @@ def _shift(field: torch.Tensor, dx: int, dy: int, spec: GridSpec) -> torch.Tenso
 
 
 def _wt2(distance: torch.Tensor) -> torch.Tensor:
-    """计算 CAT FMG 使用的三点二次插值权重。"""
+    """Wt2."""
 
     absolute = distance.abs()
     inner = 0.75 - absolute * absolute
@@ -244,22 +244,26 @@ def resize_field(
     device: str | torch.device = "auto",
     dtype: torch.dtype = torch.float64,
 ) -> torch.Tensor:
-    """按 CAT 的 separable 三点权重在两个网格间重采样。"""
+    """Resize field."""
 
     target_device = resolve_device(device)
     value = torch.as_tensor(field, dtype=dtype, device=target_device)
     if value.ndim == 2:
         value = value.unsqueeze(0)
     if value.ndim != 3:
-        raise ValueError(f"resize_field 需要 [channel, y, x]，得到 {tuple(value.shape)}")
+        raise ValueError(
+            f"resize_field expects [channel, y, x], got {tuple(value.shape)}"
+        )
     source = GridSpec(nx=int(value.shape[2]), ny=int(value.shape[1]))
     value = value.contiguous()
     if kernel not in {"auto", "torch", "triton"}:
-        raise ValueError(f"kernel 必须是 auto、torch 或 triton，得到 {kernel}")
+        raise ValueError(f"kernel must be 'auto', 'torch', or 'triton', got {kernel!r}")
     if kernel == "triton" and (
         target_device.type != "cuda" or not dartel_triton.available()
     ):
-        raise ValueError("请求 Triton resize，但当前设备或 Python 环境不可用")
+        raise ValueError(
+            "Triton resize is unavailable on the current device or environment"
+        )
     if (
         target_device.type == "cuda"
         and kernel in {"auto", "triton"}
@@ -307,7 +311,7 @@ def _corners(
     y: torch.Tensor,
     spec: GridSpec,
 ) -> tuple[torch.Tensor, ...]:
-    """读取一个标量场在双线性插值中的四个边界点和权重。"""
+    """Corners."""
 
     ix = torch.floor(x).to(torch.long)
     iy = torch.floor(y).to(torch.long)
@@ -333,7 +337,7 @@ def _corners(
 
 
 def _bilinear(corners: tuple[torch.Tensor, ...]) -> torch.Tensor:
-    """按照 C 代码的顺序完成四点双线性插值。"""
+    """Bilinear."""
 
     k22, k12, k21, k11, dx1, dx2, dy1, dy2 = corners
     return (k22 * dx2 + k12 * dx1) * dy2 + (k21 * dx2 + k11 * dx1) * dy1
@@ -344,7 +348,7 @@ def _interpolation_indices(
     y: torch.Tensor,
     spec: GridSpec,
 ) -> tuple[torch.Tensor, ...]:
-    """一次生成双线性插值所需的四角索引和权重。"""
+    """Interpolation indices."""
 
     ix = torch.floor(x).to(torch.long)
     iy = torch.floor(y).to(torch.long)
@@ -363,7 +367,7 @@ def _interpolate_channels(
     field: torch.Tensor,
     indices: tuple[torch.Tensor, ...],
 ) -> torch.Tensor:
-    """用同一组索引同时插值多个通道，保持 CAT 双线性运算顺序。"""
+    """Interpolate channels."""
 
     (
         x22,
@@ -392,7 +396,7 @@ def _sample_channels(
     y: torch.Tensor,
     spec: GridSpec,
 ) -> torch.Tensor:
-    """用一套边界索引同时采样多个普通标量通道。"""
+    """Sample channels."""
 
     return _interpolate_channels(
         field,
@@ -407,7 +411,7 @@ def _composition_optimized(
     device: torch.device,
     dtype: torch.dtype,
 ) -> torch.Tensor:
-    """共享边界索引实现坐标图组合的设备常驻路径。"""
+    """Composition optimized."""
 
     spec = GridSpec.from_shape(a.shape)
     a_tensor = _as_grid(a, spec, device, dtype, "A")
@@ -416,22 +420,21 @@ def _composition_optimized(
     y = a_tensor[1] - 1.0
     indices = _interpolation_indices(x, y, spec)
     periods = _grid_periods(spec, device, dtype)
-    # 重用角点值完成周期坐标的跨周期修正；每个通道仍使用原 CAT 公式。
     x22, y22, x12, y12, x21, y21, x11, y11 = indices[:8]
     coordinate_field = b_tensor - 1.0
     corners_22 = coordinate_field[:, y22, x22]
     corners_12 = coordinate_field[:, y12, x12]
     corners_21 = coordinate_field[:, y21, x21]
     corners_11 = coordinate_field[:, y11, x11]
-    corners_12 = corners_12 - torch.floor(
-        (corners_12 - corners_22) / periods + 0.5
-    ) * periods
-    corners_21 = corners_21 - torch.floor(
-        (corners_21 - corners_22) / periods + 0.5
-    ) * periods
-    corners_11 = corners_11 - torch.floor(
-        (corners_11 - corners_22) / periods + 0.5
-    ) * periods
+    corners_12 = (
+        corners_12 - torch.floor((corners_12 - corners_22) / periods + 0.5) * periods
+    )
+    corners_21 = (
+        corners_21 - torch.floor((corners_21 - corners_22) / periods + 0.5) * periods
+    )
+    corners_11 = (
+        corners_11 - torch.floor((corners_11 - corners_22) / periods + 0.5) * periods
+    )
     _, _, _, _, _, _, _, _, dx1, dx2, dy1, dy2 = indices
     coordinates = (
         (corners_22 * dx2 + corners_12 * dx1) * dy2
@@ -450,7 +453,7 @@ def _composition_jacobian_optimized(
     device: torch.device,
     dtype: torch.dtype,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """共享索引一次采样坐标和 Jacobian 的设备常驻路径。"""
+    """Composition jacobian optimized."""
 
     spec = GridSpec.from_shape(a.shape)
     a_tensor = _as_grid(a, spec, device, dtype, "A")
@@ -460,10 +463,8 @@ def _composition_jacobian_optimized(
     x = a_tensor[0] - 1.0
     y = a_tensor[1] - 1.0
     indices = _interpolation_indices(x, y, spec)
-    # Jacobian 四个分量共享一次边界索引与一次四角 gather。
     sampled_jacobian = _interpolate_channels(jb_tensor, indices)
     periods = _grid_periods(spec, device, dtype)
-    # 坐标的四角值必须按分量分别修正，不能在插值结果上再做周期校正。
     x22, y22, x12, y12, x21, y21, x11, y11 = indices[:8]
     coordinate_field = b_tensor - 1.0
     coordinate_22 = coordinate_field[:, y22, x22]
@@ -471,15 +472,21 @@ def _composition_jacobian_optimized(
     coordinate_21 = coordinate_field[:, y21, x21]
     coordinate_11 = coordinate_field[:, y11, x11]
     coordinate_periods = periods
-    coordinate_12 = coordinate_12 - torch.floor(
-        (coordinate_12 - coordinate_22) / coordinate_periods + 0.5
-    ) * coordinate_periods
-    coordinate_21 = coordinate_21 - torch.floor(
-        (coordinate_21 - coordinate_22) / coordinate_periods + 0.5
-    ) * coordinate_periods
-    coordinate_11 = coordinate_11 - torch.floor(
-        (coordinate_11 - coordinate_22) / coordinate_periods + 0.5
-    ) * coordinate_periods
+    coordinate_12 = (
+        coordinate_12
+        - torch.floor((coordinate_12 - coordinate_22) / coordinate_periods + 0.5)
+        * coordinate_periods
+    )
+    coordinate_21 = (
+        coordinate_21
+        - torch.floor((coordinate_21 - coordinate_22) / coordinate_periods + 0.5)
+        * coordinate_periods
+    )
+    coordinate_11 = (
+        coordinate_11
+        - torch.floor((coordinate_11 - coordinate_22) / coordinate_periods + 0.5)
+        * coordinate_periods
+    )
     _, _, _, _, _, _, _, _, dx1, dx2, dy1, dy2 = indices
     coordinates = (
         (coordinate_22 * dx2 + coordinate_12 * dx1) * dy2
@@ -508,17 +515,19 @@ def sample_field(
     device: str | torch.device = "auto",
     dtype: torch.dtype = torch.float64,
 ) -> torch.Tensor:
-    """按 CAT 的混合边界条件对标量场做双线性采样。"""
+    """Sample field."""
 
     target_device = resolve_device(device)
     field_tensor = torch.as_tensor(field, dtype=dtype, device=target_device)
     if field_tensor.ndim != 2:
-        raise ValueError(f"sample_field 只接受二维标量场，得到 {tuple(field_tensor.shape)}")
+        raise ValueError(
+            f"sample_field accepts a 2D scalar field, got {tuple(field_tensor.shape)}"
+        )
     spec = GridSpec(nx=int(field_tensor.shape[1]), ny=int(field_tensor.shape[0]))
     x_tensor = torch.as_tensor(x, dtype=dtype, device=target_device)
     y_tensor = torch.as_tensor(y, dtype=dtype, device=target_device)
     if x_tensor.shape != y_tensor.shape:
-        raise ValueError("sample_field 的 x/y 坐标形状必须一致")
+        raise ValueError("sample_field x and y coordinates must have the same shape")
     return _bilinear(_corners(field_tensor, x_tensor, y_tensor, spec))
 
 
@@ -529,7 +538,7 @@ def _wrapped_coordinate(
     spec: GridSpec,
     period: int,
 ) -> torch.Tensor:
-    """插值周期坐标，并以左下角值为参照消除跨周期跳变。"""
+    """Wrapped coordinate."""
 
     corners = _corners(field - 1.0, x, y, spec)
     k22, k12, k21, k11, dx1, dx2, dy1, dy2 = corners
@@ -547,10 +556,7 @@ def composition(
     dtype: torch.dtype = torch.float64,
     optimized: bool = True,
 ) -> torch.Tensor:
-    """计算 CAT DARTEL 的坐标图组合 ``C = B(A)``。
-
-    ``optimized=False`` 保留逐通道、逐次生成插值索引的 reference 路径。
-    """
+    """Compose two coordinate maps using CAT mixed boundary conditions."""
 
     target_device = resolve_device(device)
     if optimized:
@@ -580,10 +586,7 @@ def composition_jacobian(
     dtype: torch.dtype = torch.float64,
     optimized: bool = True,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """计算坐标图组合及其链式 Jacobian。
-
-    ``optimized=False`` 保留逐分量采样的 reference 路径。
-    """
+    """Composition jacobian."""
 
     target_device = resolve_device(device)
     if optimized:
@@ -625,7 +628,7 @@ def jacobian_of_displacement(
     device: str | torch.device = "auto",
     dtype: torch.dtype = torch.float64,
 ) -> torch.Tensor:
-    """计算 CAT DARTEL 初始化所需的中心差分 Jacobian。"""
+    """Jacobian of displacement."""
 
     target_device = resolve_device(device)
     spec = GridSpec.from_shape(displacement.shape)
@@ -646,7 +649,6 @@ def jacobian_of_displacement(
     j10 = (vy[ym, xm] * -1.0 + vy[yp, xp]) * derivative_scale
     j01 = (vx[y0, x0] * -1.0 + vx[y1, x1]) * derivative_scale
     j11 = (vy[y0, x0] * -1.0 + vy[y1, x1]) * derivative_scale + 1.0
-    # CAT C 按列主序保存二维 Jacobian：j00、j10、j01、j11。
     return torch.stack((j00, j10, j01, j11), dim=0).contiguous()
 
 
@@ -657,7 +659,7 @@ def smalldef_jac(
     device: str | torch.device = "auto",
     dtype: torch.dtype = torch.float64,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """构造 CAT `smalldef_jac` 的小形变坐标图和 Jacobian。"""
+    """Smalldef jac."""
 
     target_device = resolve_device(device)
     spec = GridSpec.from_shape(displacement.shape)
@@ -681,7 +683,7 @@ def jac_div_smalldef(
     device: str | torch.device = "auto",
     dtype: torch.dtype = torch.float64,
 ) -> torch.Tensor:
-    """计算 CAT `jac_div_smalldef` 的 Jacobian 右乘小形变逆。"""
+    """Jac div smalldef."""
 
     target_device = resolve_device(device)
     spec = GridSpec.from_shape(displacement.shape)
@@ -728,15 +730,15 @@ def initialise_objfun(
     device: str | torch.device = "auto",
     dtype: torch.dtype = torch.float64,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """计算 CAT sum-of-squares 数据项的标量、梯度右端和 Hessian 分量。"""
+    """Initialise objfun."""
 
     target_device = resolve_device(device)
     source_tensor = torch.as_tensor(source, dtype=dtype, device=target_device)
     target_tensor = torch.as_tensor(target, dtype=dtype, device=target_device)
     if source_tensor.ndim != 2 or target_tensor.ndim != 2:
-        raise ValueError("initialise_objfun 的 source/target 必须是二维标量场")
+        raise ValueError("initialise_objfun source and target must be 2D scalar fields")
     if tuple(source_tensor.shape) != tuple(target_tensor.shape):
-        raise ValueError("initialise_objfun 的 source/target 形状必须一致")
+        raise ValueError("initialise_objfun source and target must have the same shape")
     spec = GridSpec(nx=int(source_tensor.shape[1]), ny=int(source_tensor.shape[0]))
     map_tensor = _as_grid(transformation, spec, target_device, dtype, "transformation")
     jacobian_tensor = _as_jacobian(jacobian, spec, target_device, dtype, "jacobian")
@@ -745,7 +747,7 @@ def initialise_objfun(
     else:
         weights = torch.as_tensor(distortion, dtype=dtype, device=target_device)
         if tuple(weights.shape) != (spec.ny, spec.nx):
-            raise ValueError(f"distortion 形状必须是 {(spec.ny, spec.nx)}")
+            raise ValueError(f"Distortion shape must be {(spec.ny, spec.nx)}")
 
     x = map_tensor[0] - 1.0
     y = map_tensor[1] - 1.0
@@ -787,22 +789,18 @@ def squaring_update(
     optimized: bool = True,
     kernel: str = "auto",
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-    """执行 CAT DARTEL 的 b/A 累加和变换平方步骤。
-
-    默认路径把 b 的两个分量和 A 的三个分量合并为一次多通道采样；
-    ``optimized=False`` 保留逐通道调用 ``sample_field`` 的 reference 路径。
-    """
+    """Squaring update."""
 
     if k < 0:
-        raise ValueError(f"squaring 步数 k 不能为负数，得到 {k}")
+        raise ValueError(f"squaring step count k must be non-negative, got {k}")
     target_device = resolve_device(device)
     if kernel not in {"auto", "torch", "triton"}:
-        raise ValueError(f"kernel 必须是 auto、torch 或 triton，得到 {kernel}")
+        raise ValueError(f"kernel must be 'auto', 'torch', or 'triton', got {kernel!r}")
     spec = GridSpec.from_shape(transformation.shape)
     b_value = _as_grid(right_hand, spec, target_device, dtype, "right_hand").clone()
     a_tensor = torch.as_tensor(hessian, dtype=dtype, device=target_device)
     if tuple(a_tensor.shape) != (3, spec.ny, spec.nx):
-        raise ValueError(f"hessian 形状必须是 {(3, spec.ny, spec.nx)}")
+        raise ValueError(f"Hessian shape must be {(3, spec.ny, spec.nx)}")
     a_value = a_tensor.contiguous().clone()
     current_map = _as_grid(transformation, spec, target_device, dtype, "transformation")
     current_jacobian = _as_jacobian(jacobian, spec, target_device, dtype, "jacobian")
@@ -817,7 +815,7 @@ def squaring_update(
         and dartel_triton.available()
     )
     if kernel == "triton" and not use_fused_squaring and optimized:
-        raise ValueError("请求 Triton squaring，但当前设备或 Python 环境不可用")
+        raise ValueError("Triton squaring, but current device or Python is unavailable")
 
     for step in range(k):
         current_map = map_buffers[current_slot]
@@ -885,8 +883,6 @@ def squaring_update(
                 dim=0,
             ).contiguous()
             a_value += a_increment
-        # C squaring 复用另一块变换缓冲区先保存 b 增量；若本轮需要平方，
-        # 后续 composition 会覆盖这块缓冲区。
         map_buffers[other_slot] = b_increment
 
         if save_transformation or step < k - 1:
@@ -903,8 +899,6 @@ def squaring_update(
             current_slot, other_slot = other_slot, current_slot
 
     if save_transformation and current_slot != 0:
-        # C 在 save_transformation 模式下把最终 map/J 拷回原始 t0/J0
-        # 缓冲区；该缓冲区随后还会作为 FMG 的初始解工作区复用。
         map_buffers[other_slot] = map_buffers[current_slot].clone()
         jacobian_buffers[other_slot] = jacobian_buffers[current_slot].clone()
     current_map = map_buffers[current_slot]
@@ -928,15 +922,14 @@ def regularization_operator(
     device: str | torch.device = "auto",
     dtype: torch.dtype = torch.float64,
 ) -> torch.Tensor:
-    """计算 CAT DARTEL 的线性弹性、膜或弯曲正则算子。
-
-    ``params`` 沿用 C 实现的五个参数顺序：``sx, sy, mu, lambda, identity``。
-    """
+    """Regularization operator."""
 
     if len(params) != 5:
-        raise ValueError(f"正则参数必须有5个元素，得到 {len(params)}")
+        raise ValueError(
+            f"regularization parameters must contain 5 values, got {len(params)}"
+        )
     if rtype not in {0, 1, 2}:
-        raise ValueError(f"正则类型必须是0、1或2，得到 {rtype}")
+        raise ValueError(f"regularization type must be 0, 1, or 2, got {rtype}")
     target_device = resolve_device(device)
     spec = GridSpec.from_shape(field.shape)
     value = _as_grid(field, spec, target_device, dtype, "field")
@@ -977,8 +970,14 @@ def regularization_operator(
         cross_y = xym[0] - xyp[0] - xpm[0] + xpp[0]
         return torch.stack(
             (
-                wx0 * value[0] + wy2 * (ym[0] + yp[0]) + wx1 * (xm[0] + xp[0]) + wxy * cross_x,
-                wy0 * value[1] + wy1 * (ym[1] + yp[1]) + wx2 * (xm[1] + xp[1]) + wxy * cross_y,
+                wx0 * value[0]
+                + wy2 * (ym[0] + yp[0])
+                + wx1 * (xm[0] + xp[0])
+                + wxy * cross_x,
+                wy0 * value[1]
+                + wy1 * (ym[1] + yp[1])
+                + wx2 * (xm[1] + xp[1])
+                + wxy * cross_y,
             ),
             dim=0,
         ).contiguous()
@@ -1001,7 +1000,7 @@ def regularization_operator(
     xpyp = _shift(value, 1, 1, spec)
 
     def apply_bending(component: int) -> torch.Tensor:
-        """对一个向量分量应用五点弯曲模板。"""
+        """Apply bending."""
 
         return (
             w00 * value[component]
@@ -1009,12 +1008,7 @@ def regularization_operator(
             + w02 * (ymm[component] + ypp[component])
             + w10 * (xm[component] + xp[component])
             + w11
-            * (
-                xmy[component]
-                + xpy[component]
-                + xmyp[component]
-                + xpyp[component]
-            )
+            * (xmy[component] + xpy[component] + xmyp[component] + xpyp[component])
             + w20 * (xmm[component] + xpp[component])
         )
 
@@ -1030,20 +1024,20 @@ def apply_membrane_system(
     device: str | torch.device = "auto",
     dtype: torch.dtype = torch.float64,
 ) -> torch.Tensor:
-    """计算 FMG 膜系统的 ``(A + L'L) field``。"""
+    """Apply membrane system."""
 
     target_device = resolve_device(device)
     spec = GridSpec(nx=int(field.shape[-1]), ny=int(field.shape[-2]))
     a_value = torch.as_tensor(hessian, dtype=dtype, device=target_device)
     if tuple(a_value.shape) != (3, spec.ny, spec.nx):
-        raise ValueError(f"hessian 形状必须是 {(3, spec.ny, spec.nx)}")
+        raise ValueError(f"Hessian shape must be {(3, spec.ny, spec.nx)}")
     vector = _as_grid(field, spec, target_device, dtype, "field")
     if kernel not in {"auto", "torch", "triton"}:
-        raise ValueError(f"kernel 必须是 auto、torch 或 triton，得到 {kernel}")
+        raise ValueError(f"kernel must be 'auto', 'torch', or 'triton', got {kernel!r}")
     if kernel == "triton" and (
         target_device.type != "cuda" or not dartel_triton.available()
     ):
-        raise ValueError("请求 Triton 膜系统，但当前设备或 Python 环境不可用")
+        raise ValueError("Triton , but current device or Python is unavailable")
     sx, sy, mu, _lam, identity = (float(item) for item in params)
     w00 = mu * (2.0 * sx * sx + 2.0 * sy * sy) + identity
     w01 = -mu * sy * sy
@@ -1087,36 +1081,38 @@ def relax_membrane(
     device: str | torch.device = "auto",
     dtype: torch.dtype = torch.float64,
 ) -> torch.Tensor:
-    """执行 CAT `relax_me` 的红黑 Gauss-Seidel 松弛。"""
+    """Relax membrane."""
 
     if nit < 0:
-        raise ValueError(f"松弛次数不能为负数，得到 {nit}")
+        raise ValueError(f"relaxation count must be non-negative, got {nit}")
     target_device = resolve_device(device)
     b_value = torch.as_tensor(right_hand, dtype=dtype, device=target_device)
     if b_value.ndim != 3 or b_value.shape[0] != 2:
-        raise ValueError("right_hand 形状必须是 [2, ny, nx]")
+        raise ValueError("right_hand must have shape [2, ny, nx]")
     spec = GridSpec(nx=int(b_value.shape[2]), ny=int(b_value.shape[1]))
     a_value = torch.as_tensor(hessian, dtype=dtype, device=target_device)
     if tuple(a_value.shape) != (3, spec.ny, spec.nx):
-        raise ValueError(f"hessian 形状必须是 {(3, spec.ny, spec.nx)}")
+        raise ValueError(f"Hessian shape must be {(3, spec.ny, spec.nx)}")
     if initial is None:
         solution = torch.zeros_like(b_value)
     else:
         solution = _as_grid(initial, spec, target_device, dtype, "initial").clone()
 
     if len(params) != 5:
-        raise ValueError(f"正则参数必须有5个元素，得到 {len(params)}")
+        raise ValueError(
+            f"regularization parameters must contain 5 values, got {len(params)}"
+        )
     sx, sy, mu, _lam, _identity = (float(item) for item in params)
     w00 = mu * (2.0 * sx * sx + 2.0 * sy * sy) + float(params[4])
     w01 = -mu * sy * sy
     w10 = -mu * sx * sx
 
     if kernel not in {"auto", "torch", "triton"}:
-        raise ValueError(f"kernel 必须是 auto、torch 或 triton，得到 {kernel}")
+        raise ValueError(f"kernel must be 'auto', 'torch', or 'triton', got {kernel!r}")
     if kernel == "triton" and (
         target_device.type != "cuda" or not dartel_triton.available()
     ):
-        raise ValueError("请求 Triton，但当前设备或 Python 环境不可用")
+        raise ValueError("Triton, but current device or Python is unavailable")
     if (
         target_device.type == "cuda"
         and kernel in {"auto", "triton"}
@@ -1136,13 +1132,16 @@ def relax_membrane(
 
     if spec.nx % 2 == 1 and spec.nx != 1:
         if target_device.type == "cuda":
-            raise ValueError("CUDA 红黑松弛要求 x 网格宽度为偶数，奇数宽度请显式使用 CPU")
+            raise ValueError(
+                "CUDA red-black relaxation requires an even x dimension; use CPU explicitly"
+            )
         for iteration in range(2 * nit):
             for row in range(spec.ny):
                 start = int((iteration % 2) == (row % 2))
                 for column in range(start, spec.nx, 2):
+
                     def bound_scalar(ix: int, iy: int) -> tuple[int, int]:
-                        """返回奇数宽度 CPU 顺序路径的混合边界索引。"""
+                        """Bound scalar."""
 
                         xx = ix % spec.nx
                         if spec.ny == 1:
@@ -1159,12 +1158,16 @@ def relax_membrane(
                     xp, yp = bound_scalar(column + 1, row)
                     x0, y0 = bound_scalar(column, row - 1)
                     x1, y1 = bound_scalar(column, row + 1)
-                    residual_x = b_value[0, row, column] - w01 * (
-                        solution[0, y0, x0] + solution[0, y1, x1]
-                    ) - w10 * (solution[0, ym, xm] + solution[0, yp, xp])
-                    residual_y = b_value[1, row, column] - w01 * (
-                        solution[1, y0, x0] + solution[1, y1, x1]
-                    ) - w10 * (solution[1, ym, xm] + solution[1, yp, xp])
+                    residual_x = (
+                        b_value[0, row, column]
+                        - w01 * (solution[0, y0, x0] + solution[0, y1, x1])
+                        - w10 * (solution[0, ym, xm] + solution[0, yp, xp])
+                    )
+                    residual_y = (
+                        b_value[1, row, column]
+                        - w01 * (solution[1, y0, x0] + solution[1, y1, x1])
+                        - w10 * (solution[1, ym, xm] + solution[1, yp, xp])
+                    )
                     diagonal_x = a_value[0, row, column] + w00
                     diagonal_y = a_value[1, row, column] + w00
                     cross = a_value[2, row, column]
@@ -1194,8 +1197,6 @@ def relax_membrane(
         determinant = diagonal_x * diagonal_y * 1.0000000001 - cross * cross
         new_x = (diagonal_y * residual_x - cross * residual_y) / determinant
         new_y = (-cross * residual_x + diagonal_x * residual_y) / determinant
-        # 偶数宽度的周期网格是二分图；首轮更新奇偶和为1的点，第二轮
-        # 更新另一种颜色，与上游 C 的起始列规则一致。
         active = checker if iteration % 2 == 0 else ~checker
         solution = torch.stack(
             (
@@ -1220,24 +1221,24 @@ def fmg2_membrane(
     dtype: torch.dtype = torch.float64,
     assume_initial_nonzero: bool = False,
 ) -> torch.Tensor:
-    """执行默认膜正则 DARTEL 的 full multigrid 求解。
-
-    ``kernel`` 传递给各层的重采样和膜松弛器；``auto`` 在可用时选择
-    CUDA Triton，否则选择当前设备上的 Torch 实现。
-    """
+    """Fmg2 membrane."""
 
     if cycles < 0 or nit < 0:
-        raise ValueError(f"FMG cycles/nit 不能为负数，得到 {(cycles, nit)}")
+        raise ValueError(
+            f"FMG cycles and nit must be non-negative, got {(cycles, nit)}"
+        )
     target_device = resolve_device(device)
     b_value = torch.as_tensor(right_hand, dtype=dtype, device=target_device)
     if b_value.ndim != 3 or b_value.shape[0] != 2:
-        raise ValueError("right_hand 形状必须是 [2, ny, nx]")
+        raise ValueError("right_hand must have shape [2, ny, nx]")
     fine = GridSpec(nx=int(b_value.shape[2]), ny=int(b_value.shape[1]))
     a_value = torch.as_tensor(hessian, dtype=dtype, device=target_device)
     if tuple(a_value.shape) != (3, fine.ny, fine.nx):
-        raise ValueError(f"hessian 形状必须是 {(3, fine.ny, fine.nx)}")
+        raise ValueError(f"Hessian shape must be {(3, fine.ny, fine.nx)}")
     if len(params) != 5:
-        raise ValueError(f"正则参数必须有5个元素，得到 {len(params)}")
+        raise ValueError(
+            f"regularization parameters must contain 5 values, got {len(params)}"
+        )
     base_params = tuple(float(item) for item in params)
 
     specs = [fine]
@@ -1271,7 +1272,7 @@ def fmg2_membrane(
         )
 
     def level_params(level: int) -> tuple[float, float, float, float, float]:
-        """按 C FMG 规则缩放每层的空间步长。"""
+        """Level params."""
 
         return (
             base_params[0] * specs[level].nx / fine.nx,
@@ -1298,9 +1299,8 @@ def fmg2_membrane(
             )
 
     def solve_coarse() -> None:
-        """在最粗层执行 CAT 的局部二乘初值和松弛。"""
+        """Solve coarse."""
 
-        coarse = specs[-1]
         coarse_a = a_levels[-1]
         coarse_b = original_b_levels[-1]
         diagonal_x = coarse_a[0] + base_params[4]
@@ -1326,7 +1326,7 @@ def fmg2_membrane(
         )
 
     def residual(level: int) -> torch.Tensor:
-        """计算一层的线性系统残差。"""
+        """Residual."""
 
         applied = apply_membrane_system(
             a_levels[level],
@@ -1339,7 +1339,7 @@ def fmg2_membrane(
         return b_levels[level] - applied
 
     def cycle(start_level: int) -> None:
-        """执行一次从指定层向粗层再回传的 FMG cycle。"""
+        """Cycle."""
 
         for level in range(start_level, len(specs) - 1):
             u_levels[level] = relax_membrane(
@@ -1389,9 +1389,6 @@ def fmg2_membrane(
                 dtype=dtype,
             )
 
-    # CUDA Graph 捕获期间不能把 CUDA 标量同步回 host；正式 DARTEL 的
-    # solver_initial 是带一基坐标的变换图，显式 graph-safe 路径可以跳过
-    # 这个检查。默认仍保留原来的全零检查，避免改变 reference 语义。
     if initial is None:
         use_coarse_initialisation = True
     elif assume_initial_nonzero:
@@ -1440,37 +1437,37 @@ def dartel_step(
     optimized: bool = True,
     assume_initial_nonzero: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """执行官方 DARTEL `dartel()` 的一个膜正则更新步骤。
-
-    当前实现覆盖 CAT 默认的膜正则 ``rtype=1`` 以及平方和目标
-    ``code=0/1``；返回更新后的速度场和 ``[ssl, ssp/2, normb]`` 诊断量。
-    ``source``、``target`` 是二维标量图，``velocity`` 是 ``[2, ny, nx]``。
-    ``optimized=False`` 保留逐通道插值的 reference 计算路径。
-    """
+    """Execute one upstream-compatible membrane-regularized DARTEL step."""
 
     if k < 0:
-        raise ValueError(f"DARTEL k 不能为负数，得到 {k}")
+        raise ValueError(f"DARTEL step count k must be non-negative, got {k}")
     if cycles < 0 or nit < 0:
-        raise ValueError(f"DARTEL cycles/nit 不能为负数，得到 {(cycles, nit)}")
-    if squaring_kernel not in {None, "auto", "torch", "triton"}:
         raise ValueError(
-            "squaring_kernel 必须为 None、auto、torch 或 triton"
+            f"DARTEL cycles and nit must be non-negative, got {(cycles, nit)}"
         )
+    if squaring_kernel not in {None, "auto", "torch", "triton"}:
+        raise ValueError("squaring_kernel must be None, 'auto', 'torch', or 'triton'")
     if code not in {0, 1}:
-        raise NotImplementedError("当前 Python DARTEL 步骤只支持 code=0 或 code=1")
+        raise NotImplementedError(
+            "The Python DARTEL implementation supports only code 0 and 1"
+        )
     if rtype != 1:
-        raise NotImplementedError("当前 Python DARTEL 步骤只支持膜正则 rtype=1")
+        raise NotImplementedError(
+            "The Python DARTEL implementation supports only rtype 1"
+        )
     if len(params) != 5:
-        raise ValueError(f"DARTEL 正则参数必须有5个元素，得到 {len(params)}")
+        raise ValueError(
+            f"DARTEL regularization parameters must contain 5 values, got {len(params)}"
+        )
     resolved_squaring_kernel = kernel if squaring_kernel is None else squaring_kernel
 
     target_device = resolve_device(device)
     source_value = torch.as_tensor(source, dtype=dtype, device=target_device)
     target_value = torch.as_tensor(target, dtype=dtype, device=target_device)
     if source_value.ndim != 2 or target_value.ndim != 2:
-        raise ValueError("DARTEL source/target 必须是二维标量图")
+        raise ValueError("DARTEL source and target must be 2D scalar fields")
     if tuple(source_value.shape) != tuple(target_value.shape):
-        raise ValueError("DARTEL source/target 形状必须一致")
+        raise ValueError("DARTEL source and target must have the same shape")
     spec = GridSpec(nx=int(source_value.shape[1]), ny=int(source_value.shape[0]))
     source_value = source_value.contiguous()
     target_value = target_value.contiguous()
@@ -1490,7 +1487,7 @@ def dartel_step(
             device=target_device,
         )
         if distortion_value.numel() != spec.points:
-            raise ValueError(f"distortion 元素数必须是 {spec.points}")
+            raise ValueError(f"Distortion must be {spec.points}")
         distortion_value = distortion_value.reshape(spec.ny, spec.nx).contiguous()
 
     scale = 1.0 / float(2**k)
@@ -1613,12 +1610,9 @@ def dartel_step(
     if distortion_value is None:
         update_weight = 1.0
     else:
-        # CAT 的 dartel() 使用每一行第一个 dj 值作为该行的球面权重。
         update_weight = distortion_value[:, :1]
     updated_velocity = velocity_value - solution * update_weight
-    metrics = torch.stack(
-        (objective, regularization_objective * 0.5, norm_right_hand)
-    )
+    metrics = torch.stack((objective, regularization_objective * 0.5, norm_right_hand))
     return updated_velocity.contiguous(), metrics.contiguous()
 
 
@@ -1631,13 +1625,10 @@ def expdef(
     dtype: torch.dtype = torch.float64,
     optimized: bool = True,
 ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
-    """计算 CAT DARTEL 的 scaling-and-squaring 指数形变。
-
-    ``optimized=False`` 保留逐分量插值的 reference 组合路径。
-    """
+    """Exponentiate a velocity field by CAT scaling and squaring."""
 
     if k < 0:
-        raise ValueError(f"指数形变步数 k 不能为负数，得到 {k}")
+        raise ValueError(f"exponentiation step count k must be non-negative, got {k}")
     target_device = resolve_device(device)
     spec = GridSpec.from_shape(displacement.shape)
     velocity = _as_grid(displacement, spec, target_device, dtype, "displacement")

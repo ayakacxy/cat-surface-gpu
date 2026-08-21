@@ -1,4 +1,4 @@
-"""初始旋转 depth-potential 的矩阵和图着色合同测试。"""
+"""CAT-Surface GPU implementation."""
 
 # SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -18,7 +18,7 @@ from test_surface_stencil import _make_small_stencil
 
 
 def test_depth_potential_regularisation_is_added_once_per_vertex():
-    """alpha 面积项不应随顶点所属三角形数量重复加入。"""
+    """Test depth potential regularisation is added once per vertex."""
 
     stencil = _make_small_stencil()
     points = torch.as_tensor(stencil.sphere_points, dtype=torch.float64)
@@ -42,7 +42,7 @@ def test_depth_potential_regularisation_is_added_once_per_vertex():
 
 
 def test_colored_groups_have_no_adjacent_vertices():
-    """每个 GPU SOR 颜色组内的顶点不应共享三角形边。"""
+    """Test colored groups have no adjacent vertices."""
 
     device_stencil = _make_small_stencil().to("cpu")
     groups = device_stencil.color_groups()
@@ -55,13 +55,11 @@ def test_colored_groups_have_no_adjacent_vertices():
 
 
 def test_official_depth_values_only_skips_the_gpu_linear_solve():
-    """官方 raw depth 值路径应只跳过线性系统并保留 50 mm 后处理。"""
+    """Test official depth values only skips the gpu linear solve."""
 
     stencil = _make_small_stencil().to("cpu")
     vertices = torch.as_tensor(stencil.sphere_points, dtype=torch.float32)
-    depth_values = torch.tensor(
-        (0.0, 0.5, 1.5, 3.0), dtype=torch.float64
-    )
+    depth_values = torch.tensor((0.0, 0.5, 1.5, 3.0), dtype=torch.float64)
     smoothed = stencil.smooth_values(depth_values, vertices, 50.0)
     expected = (smoothed - smoothed.amin()) / (
         smoothed.amax() - smoothed.amin()
@@ -75,6 +73,4 @@ def test_official_depth_values_only_skips_the_gpu_linear_solve():
     )
     assert result.iterations == 0
     assert result.relative_residual == 0.0
-    torch.testing.assert_close(
-        result.values, expected, rtol=0.0, atol=0.0
-    )
+    torch.testing.assert_close(result.values, expected, rtol=0.0, atol=0.0)

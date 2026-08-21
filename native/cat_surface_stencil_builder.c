@@ -1,6 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
-/* 为一个输入球面预计算 CAT 球面重采样和 sheet 映射的三角形 stencil。 */
 
 #include <bicpl.h>
 #include <CAT_Map.h>
@@ -98,7 +97,7 @@ static LoadedPolygons load_polygons(const char *path)
                                   &loaded.objects) != OK ||
         loaded.n_objects != 1 ||
         get_object_type(loaded.objects[0]) != POLYGONS) {
-        fprintf(stderr, "无法读取单个球面对象: %s\n", path);
+        fprintf(stderr, "Cannot read sphere: %s\n", path);
         exit(EXIT_FAILURE);
     }
     loaded.polygons = get_polygons_ptr(loaded.objects[0]);
@@ -127,7 +126,6 @@ static void *build_surface_stencil_chunk(void *argument)
                                           polygon_points, polygon_weights);
         for (int corner = 0; corner < 3; ++corner) {
             int offset = 3 * i + corner;
-            /* 权重来自 sphere；surface 索引沿用官方同面片 corner 顺序。 */
             args->indices[offset] = index_surface->indices[
                 POINT_INDEX(index_surface->end_indices, polygon, corner)];
             args->weights[offset] = polygon_weights[corner];
@@ -204,7 +202,7 @@ static void build_surface_stencil(polygons_struct *source_sphere,
     int remainder;
 
     if (indices == NULL || weights == NULL) {
-        fprintf(stderr, "分配球面重采样 stencil 失败\n");
+        fprintf(stderr, "Failed to allocate the sphere-stencil buffers\n");
         exit(EXIT_FAILURE);
     }
     create_polygons_bintree(source_sphere,
@@ -231,7 +229,7 @@ static void build_surface_stencil(polygons_struct *source_sphere,
     for (int thread = 0; thread < thread_count; ++thread)
         invalid |= arguments[thread].invalid;
     if (invalid) {
-        fprintf(stderr, "输入球面存在非三角形面片\n");
+        fprintf(stderr, "Input sphere contains a non-triangular face\n");
         exit(EXIT_FAILURE);
     }
     delete_the_bintree(&source_sphere->bintree);
@@ -257,7 +255,7 @@ static void write_sheet_stencil(FILE *output,
     int remainder;
 
     if (indices == NULL || weights == NULL) {
-        fprintf(stderr, "分配 sheet stencil 失败\n");
+        fprintf(stderr, "Failed to allocate the sheet-stencil buffers\n");
         exit(EXIT_FAILURE);
     }
     copy_polygons(output_sphere, &unit_sphere);
@@ -287,7 +285,7 @@ static void write_sheet_stencil(FILE *output,
     for (int thread = 0; thread < thread_count; ++thread)
         invalid |= arguments[thread].invalid;
     if (invalid) {
-        fprintf(stderr, "输出球面存在非三角形面片\n");
+        fprintf(stderr, "Output sphere contains a non-triangular face\n");
         exit(EXIT_FAILURE);
     }
     delete_the_bintree(&unit_sphere.bintree);
@@ -314,8 +312,6 @@ static void write_unit_sphere_points(FILE *output,
     if (points == NULL)
         exit(EXIT_FAILURE);
 
-    /* 这一步复现 CAT_Warp.c 的 map_point_to_unit_sphere，避免最终 warp
-       阶段每次重新构建 bintree 和重复做三角形定位。 */
     copy_polygons(polygons, &unit_sphere);
     for (int i = 0; i < unit_sphere.n_points; ++i)
         set_vector_length(&unit_sphere.points[i], 1.0);
@@ -372,18 +368,18 @@ int main(int argc, char **argv)
         } else if (strcmp(argv[argument], "--threads") == 0 &&
                    argument + 1 < argc) {
             if (!parse_thread_count(argv[++argument], &thread_count)) {
-                fprintf(stderr, "threads 必须是 1 到 %d 的整数\n",
+                fprintf(stderr, "Thread count must be between 1 and %d\n",
                         MAX_STENCIL_THREADS);
                 return 2;
             }
         } else {
-            fprintf(stderr, "未知 stencil 选项: %s\n", argv[argument]);
+            fprintf(stderr, "Unknown stencil option: %s\n", argv[argument]);
             return 2;
         }
     }
     if (argc < 3) {
         fprintf(stderr,
-                "用法: %s INPUT_SPHERE OUTPUT_STENCIL [--no-normalize] "
+                "Usage: %s INPUT_SPHERE OUTPUT_STENCIL [--no-normalize]"
                 "[--surface SURFACE] [--threads N]\n",
                 argv[0]);
         return 2;
@@ -393,7 +389,7 @@ int main(int argc, char **argv)
         loaded_surface = load_polygons(surface_path);
         if (loaded_surface.polygons->n_points != loaded.polygons->n_points ||
             loaded_surface.polygons->n_items != loaded.polygons->n_items) {
-            fprintf(stderr, "surface 与 sphere 的点数或面片数不一致\n");
+            fprintf(stderr, "Surface and sphere or face does not match \n");
             return 1;
         }
     }
@@ -413,9 +409,6 @@ int main(int argc, char **argv)
                bounds[4] + bounds[5]);
     create_tetrahedral_sphere(&centre, radius, radius, radius, n_triangles,
                               &output_sphere);
-    /* 先建立 surface stencil，再生成 sphere->sphere 重采样；这与
-       CAT_SurfWarpSolveDartelFlow 中 source/target 的调用顺序一致，
-       也避免 bintree 边界候选在极少数几何 tie 上改变。 */
     build_surface_stencil(
         loaded.polygons,
         surface_path == NULL ? NULL : loaded_surface.polygons,
@@ -429,7 +422,7 @@ int main(int argc, char **argv)
 
     output = fopen(argv[2], "wb");
     if (output == NULL) {
-        perror("打开 stencil 输出失败");
+        perror("Failed to open the stencil output");
         return 1;
     }
     header.magic = 0x46534354;

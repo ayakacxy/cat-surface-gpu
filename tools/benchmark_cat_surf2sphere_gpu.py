@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""在同一真实 GIFTI 输入上比较最新版 CAT_Surf2Sphere CPU/GPU。"""
+"""Benchmark CAT_Surf2Sphere on identical CPU and GPU inputs."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ from cat_surface_gpu import (
 
 
 def _read_elapsed(path: Path) -> float:
-    """读取 GNU time 输出中的墙钟秒数。"""
+    """Read GNU time's elapsed wall-clock field."""
 
     for line in path.read_text(encoding="utf-8").splitlines():
         if "Elapsed (wall clock) time" not in line:
@@ -34,7 +34,7 @@ def _read_elapsed(path: Path) -> float:
             minutes, seconds = parts
             return float(minutes) * 60.0 + float(seconds)
         return float(value)
-    raise ValueError(f"没有在 time 文件中找到墙钟时间: {path}")
+    raise ValueError(f"Elapsed wall-clock time was not found in: {path}")
 
 
 def _run_reference(
@@ -43,7 +43,7 @@ def _run_reference(
     output_path: Path,
     stop_at: int,
 ) -> float:
-    """运行最新版 CPU reference 并返回墙钟时间。"""
+    """Run the CPU reference and return end-to-end wall time."""
 
     start = time.perf_counter()
     completed = subprocess.run(
@@ -55,38 +55,30 @@ def _run_reference(
     elapsed = time.perf_counter() - start
     if completed.returncode != 0:
         raise RuntimeError(
-            "CAT_Surf2Sphere CPU reference 失败:\n"
-            + completed.stderr[-4000:]
+            "CAT_Surf2Sphere CPU reference failed:\n" + completed.stderr[-4000:]
         )
     return elapsed
 
 
 def _compare(reference_path: Path, candidate_path: Path) -> dict[str, object]:
-    """比较拓扑、顶点误差和球面半径。"""
+    """Compare topology and vertex-coordinate error statistics."""
 
     reference = read_gifti_mesh(reference_path)
     candidate = read_gifti_mesh(candidate_path)
     if not np.array_equal(reference.faces, candidate.faces):
-        raise RuntimeError("GPU 输出面片拓扑与最新版 CPU reference 不一致")
+        raise RuntimeError("GPU and CPU reference face arrays do not match")
     difference = np.abs(
-        reference.vertices.astype(np.float64)
-        - candidate.vertices.astype(np.float64)
+        reference.vertices.astype(np.float64) - candidate.vertices.astype(np.float64)
     )
-    reference_radius = np.linalg.norm(
-        reference.vertices.astype(np.float64), axis=1
-    )
-    candidate_radius = np.linalg.norm(
-        candidate.vertices.astype(np.float64), axis=1
-    )
+    reference_radius = np.linalg.norm(reference.vertices.astype(np.float64), axis=1)
+    candidate_radius = np.linalg.norm(candidate.vertices.astype(np.float64), axis=1)
     return {
         "faces_exact": True,
         "vertices_shape": list(reference.vertices.shape),
         "vertices_max_abs": float(difference.max()),
         "vertices_mean_abs": float(difference.mean()),
         "vertices_p99_abs": float(np.quantile(difference, 0.99)),
-        "radius_max_abs": float(
-            np.abs(reference_radius - candidate_radius).max()
-        ),
+        "radius_max_abs": float(np.abs(reference_radius - candidate_radius).max()),
         "reference_radius_min": float(reference_radius.min()),
         "reference_radius_max": float(reference_radius.max()),
         "candidate_radius_min": float(candidate_radius.min()),
@@ -95,7 +87,7 @@ def _compare(reference_path: Path, candidate_path: Path) -> dict[str, object]:
 
 
 def main() -> int:
-    """执行 CAT_Surf2Sphere GPU A/B 并检查显式误差合同。"""
+    """Run the paired benchmark and enforce numerical thresholds."""
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--reference-cli", type=Path, required=True)
@@ -103,50 +95,56 @@ def main() -> int:
     parser.add_argument("--gpu-output", type=Path, required=True)
     parser.add_argument("--reference-output", type=Path)
     parser.add_argument("--reference-time-file", type=Path)
+    parser.add_argument(
+        "--reuse-reference",
+        action="store_true",
+        help="Reuse an existing reference output instead of running the CPU executable",
+    )
     parser.add_argument("--stop-at", type=int, default=10)
     parser.add_argument("--device", default="cuda")
-    parser.add_argument(
-        "--dtype", choices=("float32", "float64"), default="float32"
-    )
+    parser.add_argument("--dtype", choices=("float32", "float64"), default="float32")
     parser.add_argument("--kernel", choices=("torch", "triton"), default="triton")
     parser.add_argument(
         "--preprocess-kernel",
         choices=("cpu", "triton"),
         default="cpu",
-        help="前五个膨胀/诊断阶段使用的显式后端",
+        help="Preprocessing backend: upstream CPU reference or CUDA Triton",
     )
     parser.add_argument(
         "--preprocess-block-size",
         type=int,
         default=131072,
-        help="前处理按顶点编号分块的大小",
+        help="Maximum vertices per preprocessing launch",
     )
     parser.add_argument(
         "--areal-block-size",
         type=int,
-        help="面积平滑按顶点编号分块的大小；未设置时使用整图着色",
+        help="Maximum vertices per area-smoothing launch",
     )
     parser.add_argument(
         "--areal-schedule",
         choices=("ordered", "color"),
         default="ordered",
-        help="面积平滑调度；ordered 保持官方顶点依赖顺序",
+        help="Ordered preserves upstream dependencies; color is experimental",
     )
     parser.add_argument(
         "--areal-arithmetic",
         choices=("cat", "fp32"),
         default="cat",
-        help="面积平滑算术；cat 使用官方 float 存储/double 累加边界",
+        help="CAT preserves upstream float/double boundaries; fp32 is experimental",
     )
     parser.add_argument("--max-vertex-error", type=float, default=5.0e-3)
     parser.add_argument("--max-mean-error", type=float, default=1.0e-3)
     parser.add_argument("--max-p99-error", type=float, default=3.0e-3)
     args = parser.parse_args()
 
-    if args.reference_output is None:
-        reference_output = args.gpu_output.with_name(
-            args.gpu_output.stem + ".reference.gii"
-        )
+    if args.reference_time_file is not None and not args.reuse_reference:
+        parser.error("--reference-time-file requires --reuse-reference")
+
+    reference_output = args.reference_output or args.gpu_output.with_name(
+        args.gpu_output.stem + ".reference.gii"
+    )
+    if not args.reuse_reference:
         reference_seconds = _run_reference(
             args.reference_cli,
             args.input_surface,
@@ -154,7 +152,10 @@ def main() -> int:
             args.stop_at,
         )
     else:
-        reference_output = args.reference_output
+        if not reference_output.is_file():
+            raise FileNotFoundError(
+                f"--reuse-reference requires an existing file: {reference_output}"
+            )
         if args.reference_time_file is not None:
             reference_seconds = _read_elapsed(args.reference_time_file)
         else:

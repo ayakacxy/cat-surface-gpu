@@ -1,6 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
-/* 并行计算官方初始旋转的 source/target depth-potential 特征。 */
 
 #define _XOPEN_SOURCE 700
 
@@ -65,10 +64,6 @@ static void *resample_points(void *argument)
     return NULL;
 }
 
-/*
- * 复用已经建立的 source sphere bintree，保持官方重采样的半径、查询、
- * 重心累加和法向计算顺序。这个函数只消除重复建树和释放树的开销。
- */
 static void resample_spherical_surface_keep_bintree(
     polygons_struct *polygons, polygons_struct *source_sphere,
     polygons_struct *resampled_source, int n_triangles)
@@ -101,7 +96,7 @@ static void resample_spherical_surface_keep_bintree(
     new_points = (Point *)malloc(sizeof(*new_points) *
                                  (size_t)resampled_source->n_points);
     if (new_points == NULL) {
-        fprintf(stderr, "分配 coarse 重采样缓冲区失败\n");
+        fprintf(stderr, "Failed to allocate the coarse-surface buffer\n");
         exit(EXIT_FAILURE);
     }
     chunk_size = resampled_source->n_points / num_threads;
@@ -118,13 +113,13 @@ static void resample_spherical_surface_keep_bintree(
         arguments[thread].new_points = new_points;
         if (pthread_create(&threads[thread], NULL, resample_points,
                            &arguments[thread]) != 0) {
-            perror("启动 coarse 重采样线程失败");
+            perror("Failed to start a coarse-resampling thread");
             exit(EXIT_FAILURE);
         }
     }
     for (int thread = 0; thread < num_threads; ++thread) {
         if (pthread_join(threads[thread], NULL) != 0) {
-            perror("等待 coarse 重采样线程失败");
+            perror("Failed to join a coarse-resampling thread");
             exit(EXIT_FAILURE);
         }
     }
@@ -141,14 +136,12 @@ static polygons_struct *load_polygons(const char *path,
     File_formats format;
     if (input_graphics_any_format((char *)path, &format, n_objects, objects) != OK ||
         *n_objects != 1 || get_object_type((*objects)[0]) != POLYGONS) {
-        fprintf(stderr, "无法读取单个曲面对象: %s\n", path);
+        fprintf(stderr, "Cannot read surface: %s\n", path);
         return NULL;
     }
     return get_polygons_ptr((*objects)[0]);
 }
 
-/* 在 raw depth 模式下同时导出已经完成官方 coarse heat-kernel 的几何，
- * 供 GPU 直接复用，避免另起 geometry probe 重复做同一次重采样和平滑。 */
 static int write_geometry_sidecar(const char *feature_path,
                                   const polygons_struct *mapped)
 {
@@ -162,7 +155,7 @@ static int write_geometry_sidecar(const char *feature_path,
         return 1;
     output = fopen(geometry_path, "wb");
     if (output == NULL) {
-        perror("打开 raw depth 几何 sidecar 失败");
+        perror("Failed to open the raw-depth geometry sidecar");
         return 1;
     }
     if (fwrite(&mapped->n_points, sizeof(mapped->n_points), 1, output) != 1) {
@@ -220,14 +213,11 @@ static int write_one_feature(const char *surface_path,
         return 1;
     after_load = monotonic_seconds();
 
-    /* 保持官方 source/target sphere 的质心平移和逐点单位化。 */
     translate_to_center_of_mass(sphere);
     for (int i = 0; i < sphere->n_points; ++i)
         set_vector_length(&sphere->points[i], 1.0);
     after_normalize = monotonic_seconds();
 
-    /* 特征只读取 mapped_surface；source sphere 的 coarse 几何由 stencil
-       helper 单独生成，这里不再重复创建一份不会被读取的 mapped_sphere。 */
     create_polygons_bintree(sphere, ROUND((float)sphere->n_items * 0.5));
     resample_spherical_surface_keep_bintree(surface, sphere, &mapped_surface,
                                              n_triangles);
@@ -237,20 +227,18 @@ static int write_one_feature(const char *surface_path,
     after_heat = monotonic_seconds();
     if (emit_raw_geometry &&
         write_geometry_sidecar(output_path, &mapped_surface) != 0) {
-        fprintf(stderr, "写入 raw depth 几何 sidecar 失败\n");
+        fprintf(stderr, "Failed to write the raw-depth geometry sidecar\n");
         return 1;
     }
 
     values = (double *)malloc(sizeof(*values) * mapped_surface.n_points);
     if (values == NULL) {
-        fprintf(stderr, "分配单侧初始旋转特征失败\n");
+        fprintf(stderr, "Failed to allocate the rotation-feature buffer\n");
         return 1;
     }
     if (emit_raw_depth) {
         int *n_neighbours = NULL;
         int **neighbours = NULL;
-        /* 只导出官方 depth-potential 的未平滑值；50 mm heat-kernel
-           平滑由 GPU 后端接管，保留 depth-potential 线性系统本身。 */
         get_all_polygon_point_neighbours(
             &mapped_surface, &n_neighbours, &neighbours);
         get_polygon_vertex_curvatures_cg(
@@ -278,7 +266,7 @@ static int write_one_feature(const char *surface_path,
 
     output = fopen(output_path, "wb");
     if (output == NULL) {
-        perror("打开单侧初始旋转特征输出失败");
+        perror("Failed to open the rotation-feature output");
         free(values);
         return 1;
     }
@@ -286,7 +274,7 @@ static int write_one_feature(const char *surface_path,
                output) != 1 ||
         fwrite(values, sizeof(*values), mapped_surface.n_points, output) !=
             (size_t)mapped_surface.n_points) {
-        fprintf(stderr, "写入单侧初始旋转特征失败\n");
+        fprintf(stderr, "Failed to write the rotation feature\n");
         fclose(output);
         free(values);
         return 1;
@@ -341,7 +329,7 @@ static int wait_child(pid_t pid, const char *label)
     int status;
     if (waitpid(pid, &status, 0) < 0 || !WIFEXITED(status) ||
         WEXITSTATUS(status) != 0) {
-        fprintf(stderr, "%s 初始旋转特征子进程失败\n", label);
+        fprintf(stderr, "%s rotation-feature process failed\n", label);
         return 1;
     }
     return 0;
@@ -360,12 +348,12 @@ static int combine_features(const char *source_path,
 
     if (read_feature(source_path, &source_count, &source_values) != 0 ||
         read_feature(target_path, &target_count, &target_values) != 0) {
-        fprintf(stderr, "读取 source/target 特征中间文件失败\n");
+        fprintf(stderr, "Failed to read a source or target feature file\n");
         goto cleanup;
     }
     output = fopen(output_path, "wb");
     if (output == NULL) {
-        perror("打开合并特征输出失败");
+        perror("Failed to open the combined feature output");
         goto cleanup;
     }
     if (fwrite(&source_count, sizeof(source_count), 1, output) != 1 ||
@@ -374,7 +362,7 @@ static int combine_features(const char *source_path,
             (size_t)source_count ||
         fwrite(target_values, sizeof(*target_values), target_count, output) !=
             (size_t)target_count) {
-        fprintf(stderr, "写入合并特征失败\n");
+        fprintf(stderr, "Failed to write the combined features\n");
         goto cleanup;
     }
     result = 0;
@@ -421,7 +409,7 @@ static int publish_geometry_sidecars(const char *source_path,
         return 1;
     if (rename(source_geometry, output_source_geometry) != 0 ||
         rename(target_geometry, output_target_geometry) != 0) {
-        perror("发布 raw depth 几何 sidecar 失败");
+        perror("Publish raw depth geometry sidecar failed");
         return 1;
     }
     return 0;
@@ -441,13 +429,13 @@ static int run_parallel(const char *source_path,
 
     if (make_temp_file(source_tmp, sizeof(source_tmp)) != 0 ||
         make_temp_file(target_tmp, sizeof(target_tmp)) != 0) {
-        fprintf(stderr, "创建并行特征临时文件失败\n");
+        fprintf(stderr, "Failed to create a temporary feature file\n");
         return 1;
     }
 
     source_pid = fork();
     if (source_pid < 0) {
-        perror("启动 source 特征子进程失败");
+        perror("Failed to start the source feature process");
         goto cleanup;
     }
     if (source_pid == 0)
@@ -456,7 +444,7 @@ static int run_parallel(const char *source_path,
 
     target_pid = fork();
     if (target_pid < 0) {
-        perror("启动 target 特征子进程失败");
+        perror("Failed to start the target feature process");
         kill(source_pid, SIGTERM);
         waitpid(source_pid, NULL, 0);
         goto cleanup;
@@ -492,7 +480,7 @@ int main(int argc, char **argv)
 {
     if (argc != 6) {
         fprintf(stderr,
-                "用法: %s SOURCE SOURCE_SPHERE TARGET TARGET_SPHERE OUTPUT\n",
+                "Usage: %s SOURCE SOURCE_SPHERE TARGET TARGET_SPHERE OUTPUT\n",
                 argv[0]);
         return 2;
     }

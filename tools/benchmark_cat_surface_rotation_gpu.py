@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""测量 CAT 初始旋转候选在单一设备上的批量定位代价。"""
+"""CAT-Surface GPU implementation."""
 
 from __future__ import annotations
 
@@ -23,44 +23,44 @@ from cat_surface_gpu.dartel_grid import resolve_device
 
 
 def _synchronize(device: torch.device) -> None:
-    """在 CUDA 计时边界显式等待设备完成。"""
+    """Synchronize."""
 
     if device.type == "cuda":
         torch.cuda.synchronize(device)
 
 
 def _read_rotation_values(path: Path) -> tuple[np.ndarray, np.ndarray]:
-    """读取 rotation-values probe 写出的 source/target 双精度曲率。"""
+    """Read rotation values."""
 
     with path.open("rb") as stream:
         header = np.fromfile(stream, dtype="<i4", count=2)
         if header.size != 2:
-            raise ValueError("旋转曲率文件头不完整")
+            raise ValueError("Rotation file")
         source = np.fromfile(stream, dtype="<f8", count=int(header[0]))
         target = np.fromfile(stream, dtype="<f8", count=int(header[1]))
     if source.size != int(header[0]) or target.size != int(header[1]):
-        raise ValueError("旋转曲率文件长度不匹配")
+        raise ValueError("Rotation file length")
     return source, target
 
 
 def _read_points(path: Path) -> np.ndarray:
-    """读取 C map probe 写出的 float32 粗网格点。"""
+    """Read points."""
 
     with path.open("rb") as stream:
         header = np.fromfile(stream, dtype="<i4", count=1)
         if header.size != 1:
-            raise ValueError("source points 文件头不完整")
+            raise ValueError("Source points file")
         points = np.fromfile(stream, dtype="<f4", count=int(header[0]) * 3)
     if points.size != int(header[0]) * 3:
-        raise ValueError("source points 文件长度不匹配")
+        raise ValueError("Source points file length")
     return points.reshape(int(header[0]), 3)
 
 
 def _make_angles(count: int, seed: int) -> np.ndarray:
-    """生成固定首项加确定性伪随机项的候选角度，便于重复 A/B。"""
+    """Make angles."""
 
     if count < 1:
-        raise ValueError("candidates 必须为正数")
+        raise ValueError("Candidates must be positive")
     fixed = np.asarray(
         (
             (0.0, 0.0, 0.0),
@@ -82,7 +82,7 @@ def _make_angles(count: int, seed: int) -> np.ndarray:
 
 
 def main() -> int:
-    """运行 GPU/CPU 候选批处理 benchmark 并输出 JSON。"""
+    """Main."""
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-points", type=Path, required=True)
@@ -96,45 +96,45 @@ def main() -> int:
         "--angle-set",
         choices=("custom", "official-seed"),
         default="custom",
-        help="候选角度集合；official-seed 保持 CAT C 的 46 候选顺序",
+        help="Candidate : official-seed CAT C 46 candidate",
     )
     parser.add_argument("--seed", type=int, default=20260820)
     parser.add_argument(
         "--point-chunk",
         type=int,
         default=4096,
-        help="旋转 cost 的点块大小；默认 4096，显存不足时可降为 512",
+        help="Rotation cost : default 4096, 512",
     )
     parser.add_argument(
         "--candidate-table-dtype",
         choices=("int32", "int64"),
         default="int32",
-        help="设备端候选表的整数类型，用于同输入 A/B",
+        help="Device candidate , input A/B",
     )
     parser.add_argument(
         "--refine-nelder-mead",
         action="store_true",
-        help="在官方 seed 后执行 C 顺序 Nelder-Mead",
+        help="Upstream seed run C Nelder-Mead",
     )
     parser.add_argument(
         "--reuse-cost-inputs",
         action="store_true",
-        help="把旋转 cost 输入固定在设备，测量常驻输入优化",
+        help="Rotation cost input device , input",
     )
     parser.add_argument("--warmup", type=int, default=1)
     parser.add_argument("--repeat", type=int, default=3)
     args = parser.parse_args()
     if args.point_chunk < 1 or args.warmup < 0 or args.repeat < 1:
-        raise ValueError("point-chunk、warmup 和 repeat 参数不合法")
+        raise ValueError("Point-chunk、warmup repeat parameter valid")
 
     device = resolve_device(args.device)
     target_stencil = SurfaceStencil.from_file(args.target_stencil)
     source_points_np = _read_points(args.source_points)
     source_values, target_values = _read_rotation_values(args.rotation_values)
     if source_values.size != source_points_np.shape[0]:
-        raise ValueError("source 曲率长度与 source points 不一致")
+        raise ValueError("Source length and source points does not match")
     if target_values.size != target_stencil.sphere_points.shape[0]:
-        raise ValueError("target 曲率长度与 target stencil 不一致")
+        raise ValueError("Target length and target stencil does not match")
 
     build_start = time.perf_counter()
     index_cpu = RotationGridIndex.from_stencil(
@@ -165,17 +165,15 @@ def main() -> int:
     if args.angle_set == "official-seed":
         angles_np = official_seed_grid_angles()
         if args.candidates != angles_np.shape[0]:
-            raise ValueError("official-seed 要求 candidates=46")
+            raise ValueError("Official-seed candidates=46")
     else:
         angles_np = _make_angles(args.candidates, args.seed)
-    angles = torch.as_tensor(
-        angles_np, dtype=torch.float64, device=device
-    ).contiguous()
+    angles = torch.as_tensor(angles_np, dtype=torch.float64, device=device).contiguous()
     _synchronize(device)
     upload_seconds = time.perf_counter() - upload_start
 
     def run_once() -> torch.Tensor:
-        """执行一次完整候选批处理。"""
+        """Run once."""
 
         if args.angle_set == "official-seed":
             if prepared_inputs is not None:
@@ -237,12 +235,10 @@ def main() -> int:
         _synchronize(device)
         refine_start = time.perf_counter()
         if prepared_inputs is not None:
-            refined_angle, refined_cost, iterations = (
-                index.refine_nelder_mead_prepared(
-                    prepared_inputs,
-                    seed_angle,
-                    point_chunk=args.point_chunk,
-                )
+            refined_angle, refined_cost, iterations = index.refine_nelder_mead_prepared(
+                prepared_inputs,
+                seed_angle,
+                point_chunk=args.point_chunk,
             )
         else:
             refined_angle, refined_cost, iterations = index.refine_nelder_mead(
@@ -267,9 +263,7 @@ def main() -> int:
     payload = {
         "device": str(device),
         "device_name": (
-            torch.cuda.get_device_name(device)
-            if device.type == "cuda"
-            else "CPU"
+            torch.cuda.get_device_name(device) if device.type == "cuda" else "CPU"
         ),
         "torch": torch.__version__,
         "source_points": int(source_points.shape[0]),
@@ -295,13 +289,10 @@ def main() -> int:
         "candidate_faces_bytes": int(
             0
             if index.candidate_faces is None
-            else index.candidate_faces.numel()
-            * index.candidate_faces.element_size()
+            else index.candidate_faces.numel() * index.candidate_faces.element_size()
         ),
         "candidate_storage": (
-            "compressed-csr"
-            if index.candidate_offsets is not None
-            else "dense-table"
+            "compressed-csr" if index.candidate_offsets is not None else "dense-table"
         ),
         "candidate_table_bytes": int(
             (

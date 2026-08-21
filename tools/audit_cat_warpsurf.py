@@ -1,11 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""审计 CAT_WarpSurf 的 CPU 输入、输出和运行合同。
-
-这个工具只调用当前 reference 二进制，不替换 CAT 算法，也不读取大型文件内容做哈希。
-它为未来的 GPU 实现保存命令行、版本、GIFTI 几何结构、输出尺寸和墙钟基线。
-"""
+"""CAT-Surface GPU implementation."""
 
 from __future__ import annotations
 
@@ -24,7 +20,7 @@ import nibabel as nib
 
 @dataclass(frozen=True)
 class GeometrySummary:
-    """GIFTI 几何数组的结构摘要。"""
+    """Represent GeometrySummary."""
 
     path: str
     size_bytes: int
@@ -32,11 +28,11 @@ class GeometrySummary:
 
 
 def summarize_geometry(path: Path) -> GeometrySummary:
-    """读取 GIFTI 头和数组形状，不计算内容哈希。"""
+    """Summarize geometry."""
 
     path = Path(path).expanduser().resolve()
     if not path.is_file():
-        raise FileNotFoundError(f"GIFTI 文件不存在: {path}")
+        raise FileNotFoundError(f"GIFTI file does not exist: {path}")
     image = nib.load(str(path))
     arrays = tuple(
         {
@@ -54,7 +50,7 @@ def summarize_geometry(path: Path) -> GeometrySummary:
 
 
 def _children_usage() -> tuple[float, float, int]:
-    """读取当前脚本已等待子进程的累计 CPU/RSS。"""
+    """Children usage."""
 
     usage = resource.getrusage(resource.RUSAGE_CHILDREN)
     if sys.platform == "darwin":
@@ -65,7 +61,7 @@ def _children_usage() -> tuple[float, float, int]:
 
 
 def _read_version(binary: Path) -> str:
-    """读取 reference 二进制自带版本输出。"""
+    """Read version."""
 
     completed = subprocess.run(
         [str(binary), "-version"],
@@ -75,8 +71,6 @@ def _read_version(binary: Path) -> str:
     )
     if completed.returncode != 0:
         detail = completed.stderr.strip() or completed.stdout.strip()
-        # 部分 CAT-Surface 新版程序的通用 -version 参数本身会触发参数类型错误；
-        # 不能因为元数据读取失败而阻断真正的数值和性能审计。
         return f"unavailable (exit {completed.returncode}): {detail}"
     return (completed.stdout + completed.stderr).strip()
 
@@ -89,7 +83,7 @@ def run_one(
     hemisphere: str,
     steps: int,
 ) -> dict[str, Any]:
-    """执行一个半球的 reference CAT_WarpSurf 并记录结构基线。"""
+    """Run one."""
 
     surface_root = Path(surface_root).expanduser().resolve()
     template_root = Path(template_root).expanduser().resolve()
@@ -97,7 +91,7 @@ def run_one(
     output_root.mkdir(parents=True, exist_ok=True)
     output = output_root / f"{hemisphere}.sphere.reg.gii"
     if output.exists():
-        raise FileExistsError(f"拒绝覆盖既有 CAT 输出: {output}")
+        raise FileExistsError(f"CAT output : {output}")
 
     white = surface_root / f"{hemisphere}.white.gii"
     sphere = surface_root / f"{hemisphere}.sphere.gii"
@@ -138,10 +132,10 @@ def run_one(
     if completed.returncode != 0:
         detail = completed.stderr.strip() or completed.stdout.strip()
         raise RuntimeError(
-            f"CAT_WarpSurf {hemisphere} 返回 {completed.returncode}: {detail[-4000:]}"
+            f"CAT_WarpSurf {hemisphere} return {completed.returncode}: {detail[-4000:]}"
         )
     if not output.is_file():
-        raise RuntimeError(f"CAT_WarpSurf 没有生成输出: {output}")
+        raise RuntimeError(f"CAT_WarpSurf did not produce output: {output}")
     return {
         "hemisphere": hemisphere,
         "steps": steps,
@@ -161,21 +155,21 @@ def run_one(
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    """解析 CAT_WarpSurf 审计参数。"""
+    """Parse args."""
 
-    parser = argparse.ArgumentParser(description="审计 CAT_WarpSurf CPU 合同")
+    parser = argparse.ArgumentParser(description="CAT_WarpSurf CPU")
     parser.add_argument("--surface-root", required=True, type=Path)
     parser.add_argument(
         "--template-root",
         type=Path,
         required=True,
-        help="SimNIBS/CAT 模板曲面目录，不使用本机固定路径",
+        help="SimNIBS/CAT surface , use",
     )
     parser.add_argument(
         "--binary",
         type=Path,
         required=True,
-        help="要审计的 CAT_WarpSurf reference 二进制",
+        help="CAT_WarpSurf reference",
     )
     parser.add_argument("--output-root", required=True, type=Path)
     parser.add_argument("--hemisphere", choices=("lh", "rh", "both"), default="both")
@@ -184,12 +178,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """执行审计并打印 JSON 结果。"""
+    """Main."""
 
     args = parse_args(argv)
     binary = args.binary.expanduser().resolve()
     if not binary.is_file():
-        raise FileNotFoundError(f"CAT_WarpSurf 不存在: {binary}")
+        raise FileNotFoundError(f"CAT_WarpSurf does not exist: {binary}")
     hemispheres = ("lh", "rh") if args.hemisphere == "both" else (args.hemisphere,)
     result = {
         "binary": str(binary),

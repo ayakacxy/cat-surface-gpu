@@ -1,9 +1,4 @@
-"""初始旋转的 GPU depth-potential 特征计算。
-
-该模块保留 CAT 的粗球面、cotangent Laplacian、混合 Voronoi 面积、稳定法向、
-均值曲率和最终 heat-kernel 归一化逻辑，只把 depth-potential 的 SOR 线性系统
-改为 GPU 上的双精度预条件共轭梯度求解。CPU/CAT helper 仍作为长期 reference。
-"""
+"""CUDA feature construction for CAT initial surface rotation."""
 
 # SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -19,7 +14,7 @@ from .surface_stencil import SurfaceStencilDevice
 
 @dataclass(frozen=True)
 class RotationFeatureResult:
-    """保存一侧初始旋转特征和线性求解诊断量。"""
+    """Store normalized rotation features and solver diagnostics."""
 
     values: torch.Tensor
     iterations: int
@@ -29,7 +24,7 @@ class RotationFeatureResult:
 def _face_vectors(
     points: torch.Tensor, faces: torch.Tensor
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """按 CAT 面片角点顺序生成三条环绕边。"""
+    """Face vectors."""
 
     geometry = points.to(torch.float64)
     vertices = geometry[faces]
@@ -40,7 +35,7 @@ def _face_vectors(
 
 
 def _stable_normals(points: torch.Tensor, faces: torch.Tensor) -> torch.Tensor:
-    """复现 CAT ``stable_normals`` 的三角形加权法向。"""
+    """Stable normals."""
 
     v1, v2, v3 = _face_vectors(points, faces)
     v1 = v1 / torch.linalg.vector_norm(v1, dim=-1, keepdim=True).clamp_min(
@@ -74,13 +69,13 @@ def _stable_normals(points: torch.Tensor, faces: torch.Tensor) -> torch.Tensor:
     result.index_add_(0, faces[:, 0], triangle_normal * weight_0[:, None])
     result.index_add_(0, faces[:, 1], triangle_normal * weight_1[:, None])
     result.index_add_(0, faces[:, 2], triangle_normal * weight_2[:, None])
-    return result / torch.linalg.vector_norm(
-        result, dim=-1, keepdim=True
-    ).clamp_min(torch.finfo(torch.float64).eps)
+    return result / torch.linalg.vector_norm(result, dim=-1, keepdim=True).clamp_min(
+        torch.finfo(torch.float64).eps
+    )
 
 
 def _mixed_voronoi_areas(points: torch.Tensor, faces: torch.Tensor) -> torch.Tensor:
-    """复现 CAT ``compute_areas(..., lambda=2)`` 的混合面积。"""
+    """Mixed voronoi areas."""
 
     v1, v2, v3 = _face_vectors(points, faces)
     cross = torch.linalg.cross(v1, v2, dim=-1)
@@ -102,12 +97,15 @@ def _mixed_voronoi_areas(points: torch.Tensor, faces: torch.Tensor) -> torch.Ten
     weight_1 = lengths_2 * (v1 * v3).sum(-1) + lengths_1 * dot_23
     weight_2 = lengths_2 * (v1 * v3).sum(-1) + lengths_3 * dot_12
 
-    contribution = torch.full(
-        (faces.shape[0], 3),
-        0.125,
-        dtype=torch.float64,
-        device=points.device,
-    ) * area[:, None]
+    contribution = (
+        torch.full(
+            (faces.shape[0], 3),
+            0.125,
+            dtype=torch.float64,
+            device=points.device,
+        )
+        * area[:, None]
+    )
     acute = torch.stack(
         (
             -0.125 * weight_0 / area,
@@ -136,11 +134,7 @@ def _system_entries(
     areas: torch.Tensor,
     alpha: float,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """生成 ``0.5*L + alpha*diag(area)`` 的未合并矩阵条目。
-
-    三角形贡献只负责 cotangent Laplacian；正则项必须逐顶点追加一次，
-    不能随着顶点所在的三角形数量重复累加。
-    """
+    """System entries."""
 
     v1, v2, v3 = _face_vectors(points, faces)
     area = torch.linalg.vector_norm(
@@ -183,7 +177,7 @@ def _matrix_vector_product(
     values: torch.Tensor,
     vector: torch.Tensor,
 ) -> torch.Tensor:
-    """用预先展开的 CSR-like 条目执行一次矩阵向量乘。"""
+    """Matrix vector product."""
 
     working = vector.to(values.dtype)
     result = torch.zeros_like(working)
@@ -202,18 +196,21 @@ def _solve_depth_potential_cg(
     max_iter: int,
     tolerance: float,
 ) -> tuple[torch.Tensor, int, float]:
-    """用双精度 Jacobi-PCG 求解 CAT depth-potential 线性系统。"""
+    """Solve depth potential cg."""
 
     rows, cols, values = _system_entries(points, faces, areas, alpha)
     laplacian_rows, laplacian_cols, laplacian_values = _system_entries(
         points, faces, torch.zeros_like(areas), 0.0
     )
-    laplacian = _matrix_vector_product(
-        laplacian_rows,
-        laplacian_cols,
-        laplacian_values,
-        points,
-    ) * 2.0
+    laplacian = (
+        _matrix_vector_product(
+            laplacian_rows,
+            laplacian_cols,
+            laplacian_values,
+            points,
+        )
+        * 2.0
+    )
     mean_curvature = 0.5 * (laplacian * normals).sum(-1) / areas
     mean_curvature = torch.where(
         torch.isfinite(mean_curvature), mean_curvature, torch.zeros_like(mean_curvature)
@@ -264,23 +261,21 @@ def _solve_depth_potential_colored_sor(
     max_iter: int,
     relaxation: float = 1.90,
 ) -> tuple[torch.Tensor, int, float]:
-    """用图着色并行 SOR 保留 depth-potential 的迭代形态。
-
-    同一颜色内没有相邻顶点，因此每个颜色可以并行更新；颜色之间仍按
-    固定顺序推进。这样保留官方 SOR 的局部更新和松弛因子，同时避免
-    顺序 Gauss-Seidel 的逐顶点 GPU 依赖。
-    """
+    """Solve depth potential colored sor."""
 
     rows, cols, values = _system_entries(points, faces, areas, alpha)
     laplacian_rows, laplacian_cols, laplacian_values = _system_entries(
         points, faces, torch.zeros_like(areas), 0.0
     )
-    laplacian = _matrix_vector_product(
-        laplacian_rows,
-        laplacian_cols,
-        laplacian_values,
-        points,
-    ) * 2.0
+    laplacian = (
+        _matrix_vector_product(
+            laplacian_rows,
+            laplacian_cols,
+            laplacian_values,
+            points,
+        )
+        * 2.0
+    )
     mean_curvature = 0.5 * (laplacian * normals).sum(-1) / areas
     mean_curvature = torch.where(
         torch.isfinite(mean_curvature), mean_curvature, torch.zeros_like(mean_curvature)
@@ -291,9 +286,7 @@ def _solve_depth_potential_colored_sor(
     diagonal = torch.zeros_like(areas)
     diagonal.index_add_(0, rows, torch.where(rows == cols, values, 0.0))
     diagonal = diagonal.clamp_min(torch.finfo(torch.float64).eps)
-    rhs_norm = torch.linalg.vector_norm(rhs).clamp_min(
-        torch.finfo(torch.float64).eps
-    )
+    rhs_norm = torch.linalg.vector_norm(rhs).clamp_min(torch.finfo(torch.float64).eps)
 
     color_labels = torch.empty(
         int(points.shape[0]), dtype=torch.long, device=points.device
@@ -304,9 +297,7 @@ def _solve_depth_potential_colored_sor(
     row_colors = color_labels[rows]
     for color, vertices in enumerate(color_groups):
         selected = row_colors == color
-        row_parts.append(
-            (rows[selected], cols[selected], values[selected], vertices)
-        )
+        row_parts.append((rows[selected], cols[selected], values[selected], vertices))
 
     solution = torch.zeros_like(rhs)
     for _ in range(max_iter):
@@ -317,9 +308,9 @@ def _solve_depth_potential_colored_sor(
                 part_rows,
                 part_values * solution[part_cols],
             )
-            solution[vertices] += relaxation * (
-                rhs[vertices] - partial[vertices]
-            ) / diagonal[vertices]
+            solution[vertices] += (
+                relaxation * (rhs[vertices] - partial[vertices]) / diagonal[vertices]
+            )
 
     residual = rhs - _matrix_vector_product(rows, cols, values, solution)
     relative_residual = float(torch.linalg.vector_norm(residual) / rhs_norm)
@@ -338,16 +329,10 @@ def compute_rotation_feature(
     tolerance: float = 1.0e-9,
     solver: str = "colored-sor",
 ) -> RotationFeatureResult:
-    """在 GPU 上计算官方初始旋转的一侧归一化特征。
-
-    ``smoothed_surface`` 用于混合后端：官方 C helper 负责 coarse
-    重采样和 heat-kernel，GPU 只接管后续 depth-potential 与特征平滑。
-    ``depth_values`` 允许官方 C helper 只导出未平滑的 depth-potential，
-    GPU 接管最后的 50 mm heat-kernel；两者都不提供时保持全 GPU 路径。
-    """
+    """Compute one CAT-compatible smoothed depth-potential feature."""
 
     if solver not in {"colored-sor", "pcg"}:
-        raise ValueError("rotation feature solver 必须为 colored-sor 或 pcg")
+        raise ValueError("rotation feature solver must be 'colored-sor' or 'pcg'")
 
     if smoothed_surface is None:
         mapped_surface = stencil.resample_vertices(surface_vertices)
@@ -361,16 +346,20 @@ def compute_rotation_feature(
         expected_shape = (int(stencil.sphere_points.shape[0]), 3)
         if tuple(smoothed_surface.shape) != expected_shape:
             raise ValueError(
-                "官方 coarse feature 几何形状必须为 "
-                f"{expected_shape}，得到 {tuple(smoothed_surface.shape)}"
+                "Upstream coarse-feature geometry must have shape [points, 3]"
+                f"{expected_shape}, {tuple(smoothed_surface.shape)}"
             )
     if depth_values is not None:
-        values = torch.as_tensor(
-            depth_values, dtype=torch.float64, device=stencil.faces.device
-        ).reshape(-1).contiguous()
+        values = (
+            torch.as_tensor(
+                depth_values, dtype=torch.float64, device=stencil.faces.device
+            )
+            .reshape(-1)
+            .contiguous()
+        )
         if values.numel() != stencil.sphere_points.shape[0]:
             raise ValueError(
-                "官方 depth-potential 值数量必须等于 coarse sphere 点数"
+                "Upstream depth-potential length must match the coarse sphere"
             )
         iterations = 0
         residual = 0.0
@@ -423,22 +412,17 @@ def compute_rotation_features(
     solver: str = "colored-sor",
     parallel_sides: bool = True,
 ) -> tuple[RotationFeatureResult, ...]:
-    """按官方 source/target 逻辑计算多侧 GPU rotation feature。
-
-    source 和 target 的线性系统彼此独立；CUDA 下使用独立 stream 重叠两侧
-    计算，但每一侧内部仍保持原有面片、邻接和迭代顺序。CPU 或显式关闭时
-    保持原顺序路径。
-    """
+    """Compute source and target features, concurrently when CUDA permits."""
 
     if len(stencils) != len(surfaces) or len(stencils) != len(heat_fwhms):
-        raise ValueError("stencils、surfaces 和 heat_fwhms 长度必须一致")
+        raise ValueError("stencils, surfaces, and heat_fwhms must have equal lengths")
     if smoothed_surfaces is not None and len(smoothed_surfaces) != len(stencils):
-        raise ValueError("smoothed_surfaces 长度必须与 stencils 一致")
+        raise ValueError("smoothed_surfaces length must match stencils")
     if depth_values is not None and len(depth_values) != len(stencils):
-        raise ValueError("depth_values 长度必须与 stencils 一致")
+        raise ValueError("depth_values length must match stencils")
 
     def compute_one(index: int) -> RotationFeatureResult:
-        """计算一侧 feature，供顺序和 stream 路径复用。"""
+        """Compute one."""
 
         return compute_rotation_feature(
             stencils[index],
@@ -447,9 +431,7 @@ def compute_rotation_features(
             smoothed_surface=(
                 None if smoothed_surfaces is None else smoothed_surfaces[index]
             ),
-            depth_values=(
-                None if depth_values is None else depth_values[index]
-            ),
+            depth_values=(None if depth_values is None else depth_values[index]),
             depth_alpha=depth_alpha,
             max_iter=max_iter,
             tolerance=tolerance,

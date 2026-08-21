@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+message: "If you use CAT-Surface GPU, please cite this software and the upstream CAT-Surface and SimNIBS projects."
+title: "CAT-Surface GPU"
+type: software
+version: 0.1.0
+date-released: 2026-08-21
+authors:
+  - name: ayakacxy
+repository-code: "https://github.com/ayakacxy/cat-surface-gpu"
+url: "https://github.com/ayakacxy/cat-surface-gpu"
+license: GPL-3.0-or-later
+keywords:
+  - neuroimaging
+  - cortical surface registration
+  - CUDA
+  - Triton
+  - SimNIBS
+references:
+  - type: software
+    title: CAT-Surface
+    authors:
+      - family-names: Gaser
+        given-names: Christian
+    repository-code: "https://github.com/ChristianGaser/CAT-Surface"
+  - type: software
+    title: SimNIBS
+    repository-code: "https://github.com/simnibs/simnibs"

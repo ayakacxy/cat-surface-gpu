@@ -1,4 +1,4 @@
-"""CAT_Surf2Sphere 拓扑准备和球面投影的基础合同测试。"""
+"""CAT-Surface GPU implementation."""
 
 # SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -15,7 +15,7 @@ from cat_surface_gpu import (
 
 
 def _tetrahedron() -> GiftiMesh:
-    """构造一个不依赖真实数据的四面体网格。"""
+    """Tetrahedron."""
 
     vertices = np.asarray(
         (
@@ -34,7 +34,7 @@ def _tetrahedron() -> GiftiMesh:
 
 
 def test_surf2sphere_topology_keeps_all_incident_faces_and_colors():
-    """每个四面体顶点应看到四个入射面且同色顶点互不相邻。"""
+    """Test surf2sphere topology keeps all incident faces and colors."""
 
     mesh = _tetrahedron()
     topology = Surf2SphereTopology.from_mesh(mesh)
@@ -59,7 +59,7 @@ def test_surf2sphere_topology_keeps_all_incident_faces_and_colors():
 
 
 def test_surface_area_and_ellipsoid_projection_are_finite():
-    """球面投影应产生有限坐标和一致的目标半径。"""
+    """Test surface area and ellipsoid projection are finite."""
 
     mesh = _tetrahedron()
     area = surface_area(mesh)

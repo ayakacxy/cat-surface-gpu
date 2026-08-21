@@ -110,6 +110,14 @@ Follow-up GPU-only runs measured 31.5073 seconds with 32 workers and 31.6381 sec
 
 A final release-candidate smoke run after consolidating the package under the `cat_surface_gpu` namespace completed in 30.6743 seconds with the bundled helpers and the 8-worker default. Against the same-input CPU output, faces were exact and the maximum/mean/p99 vertex errors were `7.06e-6 / 4.74e-8 / 4.02e-7`. This single GPU-only run validates the packaged path; it is not used as the headline speedup.
 
+### Final v0.1.0 reproducible-build audit
+
+After rebuilding all four bundled ELF files from the public `BUILDING.md` procedure, a fresh paired LH run on the same RTX 2080 Ti measured `126.6581 s` for the CPU reference and `35.0607 s` for the GPU path (`3.6125x`). Faces were exact; maximum/mean/p99 vertex errors were `5.4806e-5 / 2.1548e-7 / 3.4571e-6`. This is a single release audit, not a replacement for the conservative headline pair.
+
+The rebuilt `CAT_Surf2Sphere` was also rerun on the 61,442-vertex LH input: CPU `54.9849 s`, GPU `10.6890 s`, or `5.1440x`. All 4,999 upstream sweeps executed, faces were exact, and maximum/mean/p99 vertex errors were `1.1444e-5 / 1.6734e-6 / 7.6294e-6`.
+
+The host-visible test suite completed with `34 passed, 1 skipped`; the sole skip is the mutually exclusive contract that checks behavior when CUDA is unavailable. The no-GPU suite completed with `33 passed, 2 skipped`.
+
 ## Bilateral SimNIBS-default CAT chain
 
 This benchmark runs both hemisphere processes concurrently for `CAT_Surf2Sphere`, performs the same topology upsampling used by SimNIBS, and then runs both `CAT_SurfWarp` processes concurrently.
