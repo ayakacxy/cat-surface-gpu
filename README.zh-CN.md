@@ -128,6 +128,7 @@ python tools/run_cat_surface_gpu_pipeline.py \
   --rotation-feature-backend cuda-official-depth \
   --stencil-builder bin/linux-x86_64/cat_surface_stencil_builder \
   --rotated-stencil-builder bin/linux-x86_64/cat_surface_stencil_builder \
+  --stencil-threads 8 \
   --device cuda \
   --kernel triton \
   --dartel-dtype float64 \
@@ -149,9 +150,11 @@ python tools/run_cat_surface_gpu_pipeline.py \
 | `CAT_Surf2Sphere` | 球面膨胀混合后端使用的上游 CPU reference |
 | `CAT_SurfWarp` | 完整 warp A/B 使用的上游 CPU reference |
 | `cat_surface_rotation_depth` | 导出与上游一致的初始旋转 raw depth 特征 |
-| `cat_surface_stencil_builder` | 构建确定性重采样 stencil，使用 32 个 CPU 线程编译 |
+| `cat_surface_stencil_builder` | 构建确定性重采样 stencil；默认使用 8 个 CPU worker，可通过 `--threads N` 调整 |
 
 四个程序均基于 [CAT-Surface commit `628b6851`](https://github.com/ChristianGaser/CAT-Surface/tree/628b6851d8638f3ab773cd25c0ec406d0ec61ede)，使用 `-O2 -fPIC` 构建；运行时只链接 glibc、libm 和 pthread，要求 glibc 2.29 或更新版本。SHA-256 见 [`bin/linux-x86_64/SHA256SUMS`](bin/linux-x86_64/SHA256SUMS)，两个 helper 的源码位于 [`tools/cat_surface_c/`](tools/cat_surface_c/)。
+
+Python runner 使用对应的 `--stencil-threads` 参数。默认值 8 是为了避免 source/target 前处理和左右半球并发时出现 CPU 过度订阅；高核心数机器仍可显式选择 16 或 32。
 
 ## 🎯 数值合同
 

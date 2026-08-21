@@ -49,6 +49,12 @@ def main() -> int:
     )
     parser.add_argument("--stencil-builder", type=Path, required=True)
     parser.add_argument("--rotated-stencil-builder", type=Path, required=True)
+    parser.add_argument(
+        "--stencil-threads",
+        type=int,
+        default=8,
+        help="每个 stencil helper 的 CPU worker 数；默认 8",
+    )
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--kernel", default="triton")
     parser.add_argument(
@@ -119,6 +125,7 @@ def main() -> int:
         rotation_feature_solver=args.rotation_feature_solver,
         stencil_builder=args.stencil_builder,
         rotated_stencil_builder=args.rotated_stencil_builder,
+        stencil_threads=args.stencil_threads,
         device=args.device,
         kernel=args.kernel,
         dartel_dtype=args.dartel_dtype,

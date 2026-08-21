@@ -13,10 +13,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
+#include <errno.h>
 
-#ifndef STENCIL_THREADS
-#define STENCIL_THREADS 8
-#endif
+#define DEFAULT_STENCIL_THREADS 8
+#define MAX_STENCIL_THREADS 256
 
 typedef struct {
     object_struct **objects;
@@ -64,6 +64,27 @@ typedef struct {
     int start;
     int end;
 } UnitSphereThreadArgs;
+
+static int effective_thread_count(int requested, int work_items)
+{
+    if (work_items < 1)
+        return 1;
+    return requested < work_items ? requested : work_items;
+}
+
+static int parse_thread_count(const char *value, int *thread_count)
+{
+    char *end = NULL;
+    long parsed;
+
+    errno = 0;
+    parsed = strtol(value, &end, 10);
+    if (errno != 0 || end == value || *end != '\0' || parsed < 1 ||
+        parsed > MAX_STENCIL_THREADS)
+        return 0;
+    *thread_count = (int)parsed;
+    return 1;
+}
 
 static LoadedPolygons load_polygons(const char *path)
 {
@@ -169,12 +190,15 @@ static void build_surface_stencil(polygons_struct *source_sphere,
                                   polygons_struct *surface,
                                   polygons_struct *output_sphere,
                                   int **indices_output,
-                                  double **weights_output)
+                                  double **weights_output,
+                                  int requested_threads)
 {
     int *indices = (int *)malloc(sizeof(*indices) * 3 * output_sphere->n_points);
     double *weights = (double *)malloc(sizeof(*weights) * 3 * output_sphere->n_points);
-    pthread_t threads[STENCIL_THREADS];
-    SurfaceStencilThreadArgs arguments[STENCIL_THREADS];
+    int thread_count = effective_thread_count(
+        requested_threads, output_sphere->n_points);
+    pthread_t threads[thread_count];
+    SurfaceStencilThreadArgs arguments[thread_count];
     int invalid = 0;
     int chunk_size;
     int remainder;
@@ -185,16 +209,16 @@ static void build_surface_stencil(polygons_struct *source_sphere,
     }
     create_polygons_bintree(source_sphere,
                             ROUND((double)source_sphere->n_items * 0.5));
-    chunk_size = output_sphere->n_points / STENCIL_THREADS;
-    remainder = output_sphere->n_points % STENCIL_THREADS;
-    for (int thread = 0; thread < STENCIL_THREADS; ++thread) {
+    chunk_size = output_sphere->n_points / thread_count;
+    remainder = output_sphere->n_points % thread_count;
+    for (int thread = 0; thread < thread_count; ++thread) {
         arguments[thread].source_sphere = source_sphere;
         arguments[thread].surface = surface;
         arguments[thread].output_sphere = output_sphere;
         arguments[thread].indices = indices;
         arguments[thread].weights = weights;
         arguments[thread].start = thread * chunk_size;
-        arguments[thread].end = (thread == STENCIL_THREADS - 1)
+        arguments[thread].end = (thread == thread_count - 1)
                                     ? (thread + 1) * chunk_size + remainder
                                     : (thread + 1) * chunk_size;
         arguments[thread].invalid = 0;
@@ -202,9 +226,9 @@ static void build_surface_stencil(polygons_struct *source_sphere,
                            build_surface_stencil_chunk, &arguments[thread]) != 0)
             exit(EXIT_FAILURE);
     }
-    for (int thread = 0; thread < STENCIL_THREADS; ++thread)
+    for (int thread = 0; thread < thread_count; ++thread)
         pthread_join(threads[thread], NULL);
-    for (int thread = 0; thread < STENCIL_THREADS; ++thread)
+    for (int thread = 0; thread < thread_count; ++thread)
         invalid |= arguments[thread].invalid;
     if (invalid) {
         fprintf(stderr, "输入球面存在非三角形面片\n");
@@ -218,14 +242,16 @@ static void build_surface_stencil(polygons_struct *source_sphere,
 static void write_sheet_stencil(FILE *output,
                                 polygons_struct *output_sphere,
                                 int nx,
-                                int ny)
+                                int ny,
+                                int requested_threads)
 {
     int n_sheet = nx * ny;
     int *indices = (int *)malloc(sizeof(*indices) * 3 * n_sheet);
     double *weights = (double *)malloc(sizeof(*weights) * 3 * n_sheet);
     polygons_struct unit_sphere;
-    pthread_t threads[STENCIL_THREADS];
-    SheetStencilThreadArgs arguments[STENCIL_THREADS];
+    int thread_count = effective_thread_count(requested_threads, n_sheet);
+    pthread_t threads[thread_count];
+    SheetStencilThreadArgs arguments[thread_count];
     int invalid = 0;
     int chunk_size;
     int remainder;
@@ -239,16 +265,16 @@ static void write_sheet_stencil(FILE *output,
         set_vector_length(&unit_sphere.points[i], 1.0);
     create_polygons_bintree(&unit_sphere,
                             ROUND((double)unit_sphere.n_items * 0.5));
-    chunk_size = n_sheet / STENCIL_THREADS;
-    remainder = n_sheet % STENCIL_THREADS;
-    for (int thread = 0; thread < STENCIL_THREADS; ++thread) {
+    chunk_size = n_sheet / thread_count;
+    remainder = n_sheet % thread_count;
+    for (int thread = 0; thread < thread_count; ++thread) {
         arguments[thread].unit_sphere = &unit_sphere;
         arguments[thread].indices = indices;
         arguments[thread].weights = weights;
         arguments[thread].nx = nx;
         arguments[thread].ny = ny;
         arguments[thread].start = thread * chunk_size;
-        arguments[thread].end = (thread == STENCIL_THREADS - 1)
+        arguments[thread].end = (thread == thread_count - 1)
                                     ? (thread + 1) * chunk_size + remainder
                                     : (thread + 1) * chunk_size;
         arguments[thread].invalid = 0;
@@ -256,9 +282,9 @@ static void write_sheet_stencil(FILE *output,
                            build_sheet_stencil_chunk, &arguments[thread]) != 0)
             exit(EXIT_FAILURE);
     }
-    for (int thread = 0; thread < STENCIL_THREADS; ++thread)
+    for (int thread = 0; thread < thread_count; ++thread)
         pthread_join(threads[thread], NULL);
-    for (int thread = 0; thread < STENCIL_THREADS; ++thread)
+    for (int thread = 0; thread < thread_count; ++thread)
         invalid |= arguments[thread].invalid;
     if (invalid) {
         fprintf(stderr, "输出球面存在非三角形面片\n");
@@ -272,12 +298,16 @@ static void write_sheet_stencil(FILE *output,
     free(weights);
 }
 
-static void write_unit_sphere_points(FILE *output, polygons_struct *polygons)
+static void write_unit_sphere_points(FILE *output,
+                                     polygons_struct *polygons,
+                                     int requested_threads)
 {
     polygons_struct unit_sphere;
     Point *points = (Point *)malloc(sizeof(*points) * polygons->n_points);
-    pthread_t threads[STENCIL_THREADS];
-    UnitSphereThreadArgs arguments[STENCIL_THREADS];
+    int thread_count = effective_thread_count(
+        requested_threads, polygons->n_points);
+    pthread_t threads[thread_count];
+    UnitSphereThreadArgs arguments[thread_count];
     int chunk_size;
     int remainder;
 
@@ -291,21 +321,21 @@ static void write_unit_sphere_points(FILE *output, polygons_struct *polygons)
         set_vector_length(&unit_sphere.points[i], 1.0);
     create_polygons_bintree(polygons,
                             ROUND((double)polygons->n_items * 0.5));
-    chunk_size = polygons->n_points / STENCIL_THREADS;
-    remainder = polygons->n_points % STENCIL_THREADS;
-    for (int thread = 0; thread < STENCIL_THREADS; ++thread) {
+    chunk_size = polygons->n_points / thread_count;
+    remainder = polygons->n_points % thread_count;
+    for (int thread = 0; thread < thread_count; ++thread) {
         arguments[thread].polygons = polygons;
         arguments[thread].unit_sphere = &unit_sphere;
         arguments[thread].points = points;
         arguments[thread].start = thread * chunk_size;
-        arguments[thread].end = (thread == STENCIL_THREADS - 1)
+        arguments[thread].end = (thread == thread_count - 1)
                                     ? (thread + 1) * chunk_size + remainder
                                     : (thread + 1) * chunk_size;
         if (pthread_create(&threads[thread], NULL,
                            write_unit_sphere_points_chunk, &arguments[thread]) != 0)
             exit(EXIT_FAILURE);
     }
-    for (int thread = 0; thread < STENCIL_THREADS; ++thread)
+    for (int thread = 0; thread < thread_count; ++thread)
         pthread_join(threads[thread], NULL);
     fwrite(points, sizeof(*points), polygons->n_points, output);
     free(points);
@@ -330,6 +360,7 @@ int main(int argc, char **argv)
     const int nx = 512;
     const int ny = 256;
     int normalise_input = 1;
+    int thread_count = DEFAULT_STENCIL_THREADS;
     const char *surface_path = NULL;
 
     for (int argument = 3; argument < argc; ++argument) {
@@ -338,6 +369,13 @@ int main(int argc, char **argv)
         } else if (strcmp(argv[argument], "--surface") == 0 &&
                    argument + 1 < argc) {
             surface_path = argv[++argument];
+        } else if (strcmp(argv[argument], "--threads") == 0 &&
+                   argument + 1 < argc) {
+            if (!parse_thread_count(argv[++argument], &thread_count)) {
+                fprintf(stderr, "threads 必须是 1 到 %d 的整数\n",
+                        MAX_STENCIL_THREADS);
+                return 2;
+            }
         } else {
             fprintf(stderr, "未知 stencil 选项: %s\n", argv[argument]);
             return 2;
@@ -345,7 +383,8 @@ int main(int argc, char **argv)
     }
     if (argc < 3) {
         fprintf(stderr,
-                "用法: %s INPUT_SPHERE OUTPUT_STENCIL [--no-normalize] [--surface SURFACE]\n",
+                "用法: %s INPUT_SPHERE OUTPUT_STENCIL [--no-normalize] "
+                "[--surface SURFACE] [--threads N]\n",
                 argv[0]);
         return 2;
     }
@@ -382,7 +421,8 @@ int main(int argc, char **argv)
         surface_path == NULL ? NULL : loaded_surface.polygons,
         &output_sphere,
         &surface_indices,
-        &surface_weights);
+        &surface_weights,
+        thread_count);
     resampled_sphere = (polygons_struct){0};
     resample_spherical_surface(loaded.polygons, loaded.polygons,
                                &resampled_sphere, NULL, NULL, n_triangles);
@@ -424,8 +464,8 @@ int main(int argc, char **argv)
            3 * output_sphere.n_points, output);
     free(surface_indices);
     free(surface_weights);
-    write_sheet_stencil(output, &resampled_sphere, nx, ny);
-    write_unit_sphere_points(output, loaded.polygons);
+    write_sheet_stencil(output, &resampled_sphere, nx, ny, thread_count);
+    write_unit_sphere_points(output, loaded.polygons, thread_count);
     fclose(output);
     return 0;
 }

@@ -485,6 +485,7 @@ def run_cat_surface_gpu_pipeline(
     rotation_depth_probe: str | Path | None = None,
     stencil_builder: str | Path | None = None,
     rotated_stencil_builder: str | Path | None = None,
+    stencil_threads: int = 8,
     device: str | torch.device = "cuda",
     kernel: str = "triton",
     dartel_dtype: str | torch.dtype = torch.float64,
@@ -527,6 +528,8 @@ def run_cat_surface_gpu_pipeline(
         raise ValueError("steps 必须在 1 到 3 之间")
     if runs < 1:
         raise ValueError("runs 必须为正数")
+    if stencil_threads < 1 or stencil_threads > 256:
+        raise ValueError("stencil_threads 必须在 1 到 256 之间")
     if len(curvtypes) < steps or len(fwhm) < steps:
         raise ValueError("curvtypes 和 fwhm 必须覆盖所有 steps")
     if rotation_max_iter < 1 or rotation_tol < 0.0 or rotation_simplex_step <= 0.0:
@@ -605,6 +608,8 @@ def run_cat_surface_gpu_pipeline(
                 ),
                 {
                     "builder_options": (
+                        "--threads",
+                        str(stencil_threads),
                         "--surface",
                         str(source_surface_path),
                     )
@@ -631,6 +636,8 @@ def run_cat_surface_gpu_pipeline(
                 ),
                 {
                     "builder_options": (
+                        "--threads",
+                        str(stencil_threads),
                         "--surface",
                         str(target_surface_path),
                     )
@@ -1006,6 +1013,8 @@ def run_cat_surface_gpu_pipeline(
                 {
                     "builder_options": (
                         "--no-normalize",
+                        "--threads",
+                        str(stencil_threads),
                         "--surface",
                         str(source_surface_path),
                     )
@@ -1026,6 +1035,8 @@ def run_cat_surface_gpu_pipeline(
                 {
                     "builder_options": (
                         "--no-normalize",
+                        "--threads",
+                        str(stencil_threads),
                         "--surface",
                         str(target_surface_path),
                     )
@@ -1186,6 +1197,8 @@ def run_cat_surface_gpu_pipeline(
                     "avg rotated source stencil",
                     builder_options=(
                         "--no-normalize",
+                        "--threads",
+                        str(stencil_threads),
                         "--surface",
                         str(source_surface_path),
                     ),
@@ -1238,6 +1251,8 @@ def run_cat_surface_gpu_pipeline(
                     f"第 {run_index + 1} 次 run 的 source stencil",
                     builder_options=(
                         "--no-normalize",
+                        "--threads",
+                        str(stencil_threads),
                         "--surface",
                         str(source_surface_path),
                     ),

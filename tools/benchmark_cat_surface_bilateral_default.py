@@ -134,6 +134,12 @@ def main() -> int:
     parser.add_argument("--rotation-depth-probe", type=Path, required=True)
     parser.add_argument("--stencil-builder", type=Path, required=True)
     parser.add_argument("--rotated-stencil-builder", type=Path, required=True)
+    parser.add_argument(
+        "--stencil-threads",
+        type=int,
+        default=8,
+        help="每个 stencil helper 的 CPU worker 数；默认 8",
+    )
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--areal-block-size", type=int, default=8192)
     parser.add_argument(
@@ -259,6 +265,8 @@ def main() -> int:
                 str(args.stencil_builder),
                 "--rotated-stencil-builder",
                 str(args.rotated_stencil_builder),
+                "--stencil-threads",
+                str(args.stencil_threads),
                 "--device",
                 args.device,
                 "--kernel",

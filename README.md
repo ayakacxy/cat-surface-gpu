@@ -144,6 +144,7 @@ python tools/run_cat_surface_gpu_pipeline.py \
   --rotation-feature-backend cuda-official-depth \
   --stencil-builder bin/linux-x86_64/cat_surface_stencil_builder \
   --rotated-stencil-builder bin/linux-x86_64/cat_surface_stencil_builder \
+  --stencil-threads 8 \
   --device cuda \
   --kernel triton \
   --dartel-dtype float64 \
@@ -163,9 +164,11 @@ Use `tools/benchmark_cat_surface_end_to_end.py` to compare this path against the
 | `CAT_Surf2Sphere` | Upstream CPU reference used by the hybrid spherical-inflation runner |
 | `CAT_SurfWarp` | Upstream CPU reference for end-to-end A/B |
 | `cat_surface_rotation_depth` | Exports upstream-compatible raw depth features for initial rotation |
-| `cat_surface_stencil_builder` | Builds deterministic surface-resampling stencils; compiled with 32 CPU threads |
+| `cat_surface_stencil_builder` | Builds deterministic surface-resampling stencils; uses 8 CPU workers by default and accepts `--threads N` |
 
 All four files are stripped x86-64 ELF executables built from [CAT-Surface commit `628b6851`](https://github.com/ChristianGaser/CAT-Surface/tree/628b6851d8638f3ab773cd25c0ec406d0ec61ede) with `-O2 -fPIC`. They link only to glibc, libm, and pthread at runtime. Checksums are in [`bin/linux-x86_64/SHA256SUMS`](bin/linux-x86_64/SHA256SUMS). Source files for the two helpers are available in [`tools/cat_surface_c/`](tools/cat_surface_c/).
+
+The Python runners expose the same setting as `--stencil-threads`. The default of 8 avoids excessive CPU oversubscription when source/target work and both hemispheres run concurrently; high-core-count systems can select 16 or 32 explicitly.
 
 ## 🎯 Numerical contract
 

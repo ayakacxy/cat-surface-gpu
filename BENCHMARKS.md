@@ -62,7 +62,7 @@ Input per hemisphere:
 - DARTEL map: `512 x 256`;
 - parameters: `steps=2`, `runs=2`, `avg=true`, `loop=6`, `cycles=3`, `nit=3`, `its=3`, `code=1`;
 - initial feature backend: upstream raw depth plus CUDA heat/normalization;
-- stencil helper: 32 CPU threads;
+- stencil helper: the historical headline run used 32 CPU workers; the current runtime-configurable helper defaults to 8;
 - DARTEL and squaring: FP64 Triton with CUDA Graph enabled.
 
 ### Paired end-to-end A/B
@@ -89,6 +89,24 @@ These are the conservative paired results used in the README. Later single-run e
 | Output | 0.823 | 1.75% |
 
 The remaining hotspot is the repeated solve/stencil lifecycle, not GIFTI writing or average combination.
+
+### Runtime-configurable stencil workers
+
+The bundled helper now accepts `--threads N`, and the Python runners expose the same value as `--stencil-threads`. The default is 8; thread count is no longer fixed when the binary is compiled.
+
+On the same full-resolution LH sphere, three fresh helper runs per setting produced:
+
+| CPU workers | Median wall time | Median CPU time | Output |
+| ---: | ---: | ---: | --- |
+| 8 | 4.28 s | 7.59 s | byte-identical |
+| 16 | 4.13 s | 8.39 s | byte-identical |
+| 32 | 4.03 s | 10.21 s | byte-identical |
+
+All nine stencil files had SHA-256 `bffbb212d752d4c12f4eb77d03944edc4797ca449d8e36e6e3a35db925b9dd56`. Moving from 8 to 32 workers saved about 0.25 seconds in this isolated helper while consuming substantially more aggregate CPU time.
+
+A fresh full LH CPU/GPU A/B with the runtime-configurable helper at its 8-worker default measured 110.8468 seconds for the CPU reference and 37.0151 seconds for the GPU path, or 2.9946x. Faces were exact and the final maximum/mean/p99 vertex errors were `7.06e-6 / 4.75e-8 / 4.02e-7`.
+
+Follow-up GPU-only runs measured 31.5073 seconds with 32 workers and 31.6381 seconds with 8 workers. The 0.13-second difference is within whole-pipeline run-to-run variation; it is not treated as a stable end-to-end speedup. The 8-worker default therefore retains essentially the same observed end-to-end performance while reducing oversubscription when helpers and hemispheres overlap.
 
 ## Bilateral SimNIBS-default CAT chain
 
@@ -127,6 +145,7 @@ python tools/benchmark_cat_surface_end_to_end.py \
   --rotation-feature-backend cuda-official-depth \
   --stencil-builder bin/linux-x86_64/cat_surface_stencil_builder \
   --rotated-stencil-builder bin/linux-x86_64/cat_surface_stencil_builder \
+  --stencil-threads 8 \
   --device cuda \
   --kernel triton \
   --dartel-dtype float64 \
