@@ -1,4 +1,4 @@
-# Benchmarks
+# Performance and Accuracy Benchmarks
 
 This document records the measurement boundary behind the performance numbers in the README. Results are specific to the listed hardware, software, input shapes, and parameters.
 

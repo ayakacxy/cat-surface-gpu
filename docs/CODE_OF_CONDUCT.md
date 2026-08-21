@@ -1,4 +1,4 @@
-# Code of Conduct
+# Community Code of Conduct
 
 We are committed to a respectful, harassment-free community. Be constructive, assume good faith, focus criticism on technical work, respect privacy, and welcome contributors regardless of background or experience.
 

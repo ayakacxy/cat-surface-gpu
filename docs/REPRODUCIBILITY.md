@@ -1,4 +1,4 @@
-# Reproducibility and Provenance
+# Reproducibility and Provenance Guide
 
 ## Immutable inputs
 
@@ -8,7 +8,7 @@
 - Prohibited flags: `-ffast-math`, `-Ofast`, implicit mixed precision, and architecture-specific `-march=native`
 - Recommended GPU path: FP64 DARTEL, ordered CAT-compatible `CAT_Surf2Sphere` arithmetic, and explicit CUDA failure
 
-The authoritative source revision is machine-readable in [`UPSTREAM.lock`](UPSTREAM.lock). Binary hashes are in [`bin/linux-x86_64/SHA256SUMS`](bin/linux-x86_64/SHA256SUMS).
+The authoritative source revision is machine-readable in [`UPSTREAM.lock`](../UPSTREAM.lock). Binary hashes are in [`bin/linux-x86_64/SHA256SUMS`](../bin/linux-x86_64/SHA256SUMS).
 
 ## Validation layers
 

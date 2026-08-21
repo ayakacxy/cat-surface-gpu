@@ -7,10 +7,10 @@
 [![许可证：GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
 [![正式版本](https://img.shields.io/github/v/release/ayakacxy/cat-surface-gpu?display_name=tag&sort=semver)](https://github.com/ayakacxy/cat-surface-gpu/releases/latest)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB.svg?logo=python&logoColor=white)](pyproject.toml)
-[![已测试 CUDA 12.6](https://img.shields.io/badge/CUDA-12.6-76B900.svg?logo=nvidia&logoColor=white)](BENCHMARKS.md)
+[![已测试 CUDA 12.6](https://img.shields.io/badge/CUDA-12.6-76B900.svg?logo=nvidia&logoColor=white)](docs/BENCHMARKS.md)
 [![Linux x86-64](https://img.shields.io/badge/platform-Linux%20x86--64-lightgrey.svg)](bin/linux-x86_64)
 
-[English](README.md) · [详细性能报告](BENCHMARKS.md) · [上游致谢](THIRD_PARTY_NOTICES.md)
+[English](README.md) · [文档目录](docs/README.md) · [详细性能报告](docs/BENCHMARKS.md) · [上游致谢](THIRD_PARTY_NOTICES.md)
 
 ⚡ **GPU 加速** · 🧠 **曲面配准** · 🧪 **Reference 验证** · 📦 **开箱即用二进制**
 
@@ -42,7 +42,7 @@ CPU reference 始终显式保留。请求 CUDA 但 GPU 不可用，或请求 Tri
 | `CAT_SurfWarp` | 34.9756 s |
 | **CAT 配准链路总计** | **55.2573 s** |
 
-最终 faces 逐元素一致；LH/RH `sphere.reg` 最大顶点误差分别为 `1.38e-6` 和 `1.81e-4`，均低于 `1e-3`。完整硬件、形状、参数、计时边界和阶段热点见 [BENCHMARKS.md](BENCHMARKS.md)。
+最终 faces 逐元素一致；LH/RH `sphere.reg` 最大顶点误差分别为 `1.38e-6` 和 `1.81e-4`，均低于 `1e-3`。完整硬件、形状、参数、计时边界和阶段热点见 [BENCHMARKS.md](docs/BENCHMARKS.md)。
 
 ## 🐍 Conda 环境安装
 
@@ -148,7 +148,7 @@ cat-surfwarp-gpu \
 | `cat_surface_rotation_depth` | 导出与上游一致的初始旋转 raw depth 特征 |
 | `cat_surface_stencil_builder` | 构建确定性重采样 stencil；默认使用 8 个 CPU worker，可通过 `--threads N` 调整 |
 
-四个程序均基于 [CAT-Surface commit `628b6851`](https://github.com/ChristianGaser/CAT-Surface/tree/628b6851d8638f3ab773cd25c0ec406d0ec61ede)，使用 `-O2 -fPIC` 构建；运行时只链接 glibc、libm 和 pthread，要求 glibc 2.29 或更新版本。SHA-256 见 [`bin/linux-x86_64/SHA256SUMS`](bin/linux-x86_64/SHA256SUMS)，两个 helper 的源码位于 [`native/`](native/)，完整重建步骤见 [BUILDING.md](BUILDING.md)。
+四个程序均基于 [CAT-Surface commit `628b6851`](https://github.com/ChristianGaser/CAT-Surface/tree/628b6851d8638f3ab773cd25c0ec406d0ec61ede)，使用 `-O2 -fPIC` 构建；运行时只链接 glibc、libm 和 pthread，要求 glibc 2.29 或更新版本。SHA-256 见 [`bin/linux-x86_64/SHA256SUMS`](bin/linux-x86_64/SHA256SUMS)，两个 helper 的源码位于 [`native/`](native/)，完整重建步骤见 [BUILDING.md](docs/BUILDING.md)。
 
 Python runner 使用对应的 `--stencil-threads` 参数。默认值 8 是为了避免 source/target 前处理和左右半球并发时出现 CPU 过度订阅；高核心数机器仍可显式选择 16 或 32。
 

@@ -31,24 +31,18 @@ def _copy_release_tree(root: Path, destination: Path) -> None:
     """Copy the runnable Linux bundle without local caches or private fixtures."""
 
     files = (
-        "BENCHMARKS.md",
-        "BUILDING.md",
-        "CHANGELOG.md",
         "CITATION.cff",
-        "CONTRIBUTING.md",
         "environment.yml",
         "LICENSE",
         "MANIFEST.in",
         "pyproject.toml",
         "README.md",
         "README.zh-CN.md",
-        "REPRODUCIBILITY.md",
-        "SECURITY.md",
         "setup.py",
         "THIRD_PARTY_NOTICES.md",
         "UPSTREAM.lock",
     )
-    directories = ("bin", "native", "scripts", "src", "tools", "upstream")
+    directories = ("bin", "docs", "native", "scripts", "src", "tools", "upstream")
     destination.mkdir(parents=True)
     for name in files:
         shutil.copy2(root / name, destination / name)

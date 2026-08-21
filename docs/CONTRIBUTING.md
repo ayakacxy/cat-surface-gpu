@@ -1,4 +1,4 @@
-# Contributing
+# Contributing to CAT-Surface GPU
 
 Thank you for improving CAT-Surface GPU. Correctness and reproducibility take priority over isolated kernel speed.
 

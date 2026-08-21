@@ -1,4 +1,4 @@
-# Security Policy
+# Security and Vulnerability Reporting
 
 ## Supported versions
 

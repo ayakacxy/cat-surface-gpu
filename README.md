@@ -9,10 +9,10 @@ GPU-accelerated `CAT_Surf2Sphere` and `CAT_SurfWarp`-compatible surface registra
 [![CI](https://github.com/ayakacxy/cat-surface-gpu/actions/workflows/ci.yml/badge.svg)](https://github.com/ayakacxy/cat-surface-gpu/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/ayakacxy/cat-surface-gpu/actions/workflows/codeql.yml/badge.svg)](https://github.com/ayakacxy/cat-surface-gpu/actions/workflows/codeql.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB.svg?logo=python&logoColor=white)](pyproject.toml)
-[![CUDA 12.6 tested](https://img.shields.io/badge/CUDA-12.6-76B900.svg?logo=nvidia&logoColor=white)](BENCHMARKS.md)
+[![CUDA 12.6 tested](https://img.shields.io/badge/CUDA-12.6-76B900.svg?logo=nvidia&logoColor=white)](docs/BENCHMARKS.md)
 [![Linux x86-64](https://img.shields.io/badge/platform-Linux%20x86--64-lightgrey.svg)](bin/linux-x86_64)
 
-[简体中文](README.zh-CN.md) · [Benchmarks](BENCHMARKS.md) · [Build from source](BUILDING.md) · [Upstream credits](THIRD_PARTY_NOTICES.md)
+[简体中文](README.zh-CN.md) · [Documentation](docs/README.md) · [Benchmarks](docs/BENCHMARKS.md) · [Build from source](docs/BUILDING.md) · [Upstream credits](THIRD_PARTY_NOTICES.md)
 
 ⚡ **GPU-accelerated** · 🧠 **Surface registration** · 🧪 **Reference-checked** · 📦 **Ready-to-run binaries**
 
@@ -44,7 +44,7 @@ With the SimNIBS default two-hemisphere schedule, the measured GPU wall time was
 | `CAT_SurfWarp` | 34.9756 s |
 | **Total CAT registration chain** | **55.2573 s** |
 
-Final triangle arrays were exact. Final LH/RH `sphere.reg` maximum vertex errors were `1.38e-6` and `1.81e-4`, both below the `1e-3` acceptance threshold. See [BENCHMARKS.md](BENCHMARKS.md) for hardware, shapes, parameters, timing boundaries, stage profiles, and numerical results.
+Final triangle arrays were exact. Final LH/RH `sphere.reg` maximum vertex errors were `1.38e-6` and `1.81e-4`, both below the `1e-3` acceptance threshold. See [BENCHMARKS.md](docs/BENCHMARKS.md) for hardware, shapes, parameters, timing boundaries, stage profiles, and numerical results.
 
 ## 🧩 Requirements
 
@@ -164,7 +164,7 @@ Use `tools/benchmark_cat_surface_end_to_end.py` to compare this path against the
 | `cat_surface_rotation_depth` | Exports upstream-compatible raw depth features for initial rotation |
 | `cat_surface_stencil_builder` | Builds deterministic surface-resampling stencils; uses 8 CPU workers by default and accepts `--threads N` |
 
-All four files are stripped x86-64 ELF executables built from [CAT-Surface commit `628b6851`](https://github.com/ChristianGaser/CAT-Surface/tree/628b6851d8638f3ab773cd25c0ec406d0ec61ede) with `-O2 -fPIC`. They link only to glibc, libm, and pthread at runtime. Checksums are in [`bin/linux-x86_64/SHA256SUMS`](bin/linux-x86_64/SHA256SUMS). Source files for the two helpers are available in [`native/`](native/), and the complete build procedure is in [BUILDING.md](BUILDING.md).
+All four files are stripped x86-64 ELF executables built from [CAT-Surface commit `628b6851`](https://github.com/ChristianGaser/CAT-Surface/tree/628b6851d8638f3ab773cd25c0ec406d0ec61ede) with `-O2 -fPIC`. They link only to glibc, libm, and pthread at runtime. Checksums are in [`bin/linux-x86_64/SHA256SUMS`](bin/linux-x86_64/SHA256SUMS). Source files for the two helpers are available in [`native/`](native/), and the complete build procedure is in [BUILDING.md](docs/BUILDING.md).
 
 The Python runners expose the same setting as `--stencil-threads`. The default of 8 avoids excessive CPU oversubscription when source/target work and both hemispheres run concurrently; high-core-count systems can select 16 or 32 explicitly.
 
@@ -191,7 +191,7 @@ native/                       Source for the two bundled helper programs
 scripts/                      Build and release-verification automation
 tests/                        CPU contracts and CUDA tests
 bin/linux-x86_64/             Bundled reference/helper executables
-BENCHMARKS.md                 Detailed performance and accuracy report
+docs/                         Benchmarks, build, reproducibility, and community guides
 ```
 
 ## 🧪 Synthetic smoke fixture
@@ -203,15 +203,15 @@ python tools/generate_synthetic_fixture.py --output /tmp/cat-surface-gpu-smoke
 python scripts/verify_release.py
 ```
 
-This fixture verifies packaging and structural contracts; it is not a substitute for the real-input numerical and performance A/B in [BENCHMARKS.md](BENCHMARKS.md).
+This fixture verifies packaging and structural contracts; it is not a substitute for the real-input numerical and performance A/B in [BENCHMARKS.md](docs/BENCHMARKS.md).
 
 ## 🛠️ Development and release integrity
 
-- [BUILDING.md](BUILDING.md) documents the pinned upstream source and native rebuild.
-- [REPRODUCIBILITY.md](REPRODUCIBILITY.md) defines provenance and validation layers.
-- [CONTRIBUTING.md](CONTRIBUTING.md) defines the scientific contract for changes.
-- [SECURITY.md](SECURITY.md) explains private vulnerability reporting and medical-data safety.
-- [CHANGELOG.md](CHANGELOG.md) records release-visible changes.
+- [BUILDING.md](docs/BUILDING.md) documents the pinned upstream source and native rebuild.
+- [REPRODUCIBILITY.md](docs/REPRODUCIBILITY.md) defines provenance and validation layers.
+- [CONTRIBUTING.md](docs/CONTRIBUTING.md) defines the scientific contract for changes.
+- [SECURITY.md](docs/SECURITY.md) explains private vulnerability reporting and medical-data safety.
+- [CHANGELOG.md](docs/CHANGELOG.md) records release-visible changes.
 
 ## 🙏 Credits and license
 

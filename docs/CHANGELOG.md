@@ -1,4 +1,4 @@
-# Changelog
+# Project Changelog
 
 All notable changes are documented here. This project follows semantic versioning after the initial `0.1.0` release.
 

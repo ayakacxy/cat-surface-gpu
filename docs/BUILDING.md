@@ -1,6 +1,6 @@
-# Building the Native Binaries
+# Building the Native Binaries from Source
 
-The four Linux executables distributed with CAT-Surface GPU are built from the exact CAT-Surface revision recorded in [`UPSTREAM.lock`](UPSTREAM.lock). The two project-specific helper sources live in [`native/`](native/). No `-ffast-math`, native-CPU tuning, reduced iteration count, or approximate algorithm is used.
+The four Linux executables distributed with CAT-Surface GPU are built from the exact CAT-Surface revision recorded in [`UPSTREAM.lock`](../UPSTREAM.lock). The two project-specific helper sources live in [`native/`](../native/). No `-ffast-math`, native-CPU tuning, reduced iteration count, or approximate algorithm is used.
 
 ## Build dependencies
 
@@ -36,4 +36,4 @@ Byte-identical binaries require the same compiler, binutils, glibc, Autotools, a
 
 ## Corresponding source
 
-The release source archive contains all code written for this project. The exact upstream CAT-Surface source is available at the pinned commit and is attached to the GitHub release as a separate source archive. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for license details.
+The release source archive contains all code written for this project. The exact upstream CAT-Surface source is available at the pinned commit and is attached to the GitHub release as a separate source archive. See [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) for license details.
