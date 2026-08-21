@@ -1,0 +1,9 @@
+name: cat-surface-gpu
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip>=24
+  - numpy>=1.24
+  - nibabel>=5.0
+  - pytest>=8.0

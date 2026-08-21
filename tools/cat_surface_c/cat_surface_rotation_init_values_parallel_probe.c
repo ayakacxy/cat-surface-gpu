@@ -301,7 +301,7 @@ static int make_temp_file(char *path, size_t path_size)
     const char *temp_directory = getenv("TMPDIR");
     if (temp_directory == NULL || temp_directory[0] == '\0')
         temp_directory = P_tmpdir;
-    if (snprintf(path, path_size, "%s/fast_charm_rotation_side_XXXXXX",
+    if (snprintf(path, path_size, "%s/cat_surface_gpu_rotation_XXXXXX",
                  temp_directory) >= (int)path_size)
         return -1;
     file_descriptor = mkstemp(path);

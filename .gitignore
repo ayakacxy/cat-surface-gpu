@@ -1,4 +1,4 @@
-# Python 缓存和本地环境
+# Python caches and local environments
 __pycache__/
 *.py[cod]
 .pytest_cache/
@@ -6,7 +6,7 @@ __pycache__/
 .ruff_cache/
 .venv/
 
-# 构建产物和本地编译的 C 探针
+# Local build products
 build/
 dist/
 *.egg-info/
@@ -16,7 +16,7 @@ dist/
 *.dylib
 *.exe
 
-# 真实曲面、影像和 benchmark 输出不进入仓库
+# Real surfaces, medical images, and generated benchmark data
 *.gii
 *.nii
 *.nii.gz
@@ -31,7 +31,7 @@ results/
 artifacts/
 benchmarks/
 
-# 编辑器和系统文件
+# Editor and operating-system files
 .DS_Store
 .idea/
 .vscode/
