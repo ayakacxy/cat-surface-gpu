@@ -9,7 +9,7 @@ import struct
 import numpy as np
 import torch
 
-from fast_charm.cat_surface import (
+from cat_surface_gpu import (
     SurfaceStencil,
     apply_flow_to_sphere,
     apply_flow_to_stenciled_sphere,

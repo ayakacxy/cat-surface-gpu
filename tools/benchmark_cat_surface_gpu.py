@@ -14,12 +14,12 @@ import nibabel as nib
 import numpy as np
 import torch
 
-from fast_charm.cat_surface import (
+from cat_surface_gpu import (
     SurfaceStencil,
     prepare_dartel_cuda_graph,
     solve_dartel_from_surfaces,
 )
-from fast_charm.cat_surface.dartel_grid import resolve_device
+from cat_surface_gpu.dartel_grid import resolve_device
 
 
 def _synchronize(device: torch.device) -> None:

@@ -1259,7 +1259,7 @@ def run_cat_surf2sphere_gpu(
             output_path=output_path,
         )
 
-    with tempfile.TemporaryDirectory(prefix="fast_charm_surf2sphere_") as temp_dir:
+    with tempfile.TemporaryDirectory(prefix="cat_surface_gpu_surf2sphere_") as temp_dir:
         prefix_path = Path(temp_dir) / "stage5.gii"
         start = time.perf_counter()
         completed = subprocess.run(

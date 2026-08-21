@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from fast_charm.cat_surface import (
+from cat_surface_gpu import (
     GiftiMesh,
     Surf2SphereTopology,
     convert_ellipsoid_to_sphere_with_surface_area,

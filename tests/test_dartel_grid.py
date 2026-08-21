@@ -10,8 +10,8 @@ import numpy as np
 import pytest
 import torch
 
-from fast_charm.cat_surface import dartel_triton
-from fast_charm.cat_surface.dartel_grid import (
+from cat_surface_gpu import dartel_triton
+from cat_surface_gpu.dartel_grid import (
     DeviceUnavailable,
     GridSpec,
     apply_membrane_system,
@@ -30,7 +30,7 @@ from fast_charm.cat_surface.dartel_grid import (
     squaring_update,
     to_c_layout,
 )
-from fast_charm.cat_surface.dartel_grid import _bound_indices
+from cat_surface_gpu.dartel_grid import _bound_indices
 
 
 def _bound_scalar(i: int, j: int, spec: GridSpec) -> tuple[int, int]:

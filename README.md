@@ -187,8 +187,7 @@ from cat_surface_gpu import run_cat_surf2sphere_gpu, run_cat_surface_gpu_pipelin
 ## 🗂️ Repository layout
 
 ```text
-src/cat_surface_gpu/          Public Python API
-src/fast_charm/cat_surface/   GPU kernels and surface-registration implementation
+src/cat_surface_gpu/          Public API, GPU kernels, and registration implementation
 tools/                        CLI runners, benchmarks, and A/B utilities
 tools/cat_surface_c/          Source for CAT-Surface-compatible helper programs
 tests/                        CPU contracts and CUDA tests

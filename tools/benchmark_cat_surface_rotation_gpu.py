@@ -14,12 +14,12 @@ import time
 import numpy as np
 import torch
 
-from fast_charm.cat_surface import (
+from cat_surface_gpu import (
     RotationGridIndex,
     SurfaceStencil,
     official_seed_grid_angles,
 )
-from fast_charm.cat_surface.dartel_grid import resolve_device
+from cat_surface_gpu.dartel_grid import resolve_device
 
 
 def _synchronize(device: torch.device) -> None:

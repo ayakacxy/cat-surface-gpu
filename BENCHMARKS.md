@@ -108,6 +108,8 @@ A fresh full LH CPU/GPU A/B with the runtime-configurable helper at its 8-worker
 
 Follow-up GPU-only runs measured 31.5073 seconds with 32 workers and 31.6381 seconds with 8 workers. The 0.13-second difference is within whole-pipeline run-to-run variation; it is not treated as a stable end-to-end speedup. The 8-worker default therefore retains essentially the same observed end-to-end performance while reducing oversubscription when helpers and hemispheres overlap.
 
+A final release-candidate smoke run after consolidating the package under the `cat_surface_gpu` namespace completed in 30.6743 seconds with the bundled helpers and the 8-worker default. Against the same-input CPU output, faces were exact and the maximum/mean/p99 vertex errors were `7.06e-6 / 4.74e-8 / 4.02e-7`. This single GPU-only run validates the packaged path; it is not used as the headline speedup.
+
 ## Bilateral SimNIBS-default CAT chain
 
 This benchmark runs both hemisphere processes concurrently for `CAT_Surf2Sphere`, performs the same topology upsampling used by SimNIBS, and then runs both `CAT_SurfWarp` processes concurrently.

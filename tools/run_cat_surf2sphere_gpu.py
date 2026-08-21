@@ -9,7 +9,7 @@ import argparse
 import json
 from pathlib import Path
 
-from fast_charm.cat_surface import run_cat_surf2sphere_gpu
+from cat_surface_gpu import run_cat_surf2sphere_gpu
 
 
 def main() -> int:

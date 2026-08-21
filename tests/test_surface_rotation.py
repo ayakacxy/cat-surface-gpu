@@ -7,7 +7,7 @@ from __future__ import annotations
 import numpy as np
 import torch
 
-from fast_charm.cat_surface import (
+from cat_surface_gpu import (
     RotationGridIndex,
     RotationPipeline,
     SurfaceStencil,

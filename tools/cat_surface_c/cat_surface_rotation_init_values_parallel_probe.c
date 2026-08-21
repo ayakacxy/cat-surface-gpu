@@ -200,11 +200,12 @@ static int write_one_feature(const char *surface_path,
     double *values = NULL;
     FILE *output = NULL;
     const int n_triangles = 81920;
-    const int emit_timing = getenv("FAST_CHARM_ROTATION_TIMING") != NULL;
-    const int emit_raw_depth = getenv("FAST_CHARM_ROTATION_RAW_DEPTH") != NULL;
+    const int emit_timing = getenv("CAT_SURFACE_GPU_ROTATION_TIMING") != NULL;
+    const int emit_raw_depth =
+        getenv("CAT_SURFACE_GPU_ROTATION_RAW_DEPTH") != NULL;
     const int emit_raw_geometry =
         emit_raw_depth &&
-        getenv("FAST_CHARM_ROTATION_RAW_DEPTH_GEOMETRY") != NULL;
+        getenv("CAT_SURFACE_GPU_ROTATION_RAW_DEPTH_GEOMETRY") != NULL;
     double stage_start = monotonic_seconds();
     double after_load;
     double after_normalize;
@@ -469,7 +470,7 @@ static int run_parallel(const char *source_path,
         goto cleanup;
     result = combine_features(source_tmp, target_tmp, output_path);
     if (result == 0 &&
-        getenv("FAST_CHARM_ROTATION_RAW_DEPTH_GEOMETRY") != NULL)
+        getenv("CAT_SURFACE_GPU_ROTATION_RAW_DEPTH_GEOMETRY") != NULL)
         result = publish_geometry_sidecars(source_tmp, target_tmp, output_path);
 
 cleanup:

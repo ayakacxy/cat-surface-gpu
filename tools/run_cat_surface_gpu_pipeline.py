@@ -11,7 +11,7 @@ from pathlib import Path
 
 import torch
 
-from fast_charm.cat_surface import run_cat_surface_gpu_pipeline
+from cat_surface_gpu import run_cat_surface_gpu_pipeline
 
 
 def main() -> int:

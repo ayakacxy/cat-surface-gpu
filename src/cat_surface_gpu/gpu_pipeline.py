@@ -183,10 +183,10 @@ def _prepare_rotation_values(
     environment = None
     if raw_depth:
         environment = os.environ.copy()
-        environment["FAST_CHARM_ROTATION_RAW_DEPTH"] = "1"
+        environment["CAT_SURFACE_GPU_ROTATION_RAW_DEPTH"] = "1"
         # 新版 helper 会把同一次 coarse resample/heat-kernel 的坐标写成
         # sidecar；调用方随后直接上传它，避免 raw depth 模式重复做几何。
-        environment["FAST_CHARM_ROTATION_RAW_DEPTH_GEOMETRY"] = "1"
+        environment["CAT_SURFACE_GPU_ROTATION_RAW_DEPTH_GEOMETRY"] = "1"
 
     _run_checked(
         [
@@ -585,7 +585,7 @@ def run_cat_surface_gpu_pipeline(
         "input_read_seconds": time.perf_counter() - total_start
     }
 
-    with tempfile.TemporaryDirectory(prefix="fast_charm_cat_gpu_") as temp_name:
+    with tempfile.TemporaryDirectory(prefix="cat_surface_gpu_") as temp_name:
         temp_dir = Path(temp_name)
 
         # 初始 stencil 与旋转特征互相独立，全部放到独立任务中，

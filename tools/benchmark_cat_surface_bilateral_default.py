@@ -14,7 +14,7 @@ import time
 
 import numpy as np
 
-from fast_charm.cat_surface import read_gifti_mesh
+from cat_surface_gpu import read_gifti_mesh
 
 
 def _run_parallel(

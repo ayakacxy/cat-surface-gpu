@@ -14,7 +14,7 @@ import time
 import numpy as np
 import torch
 
-from fast_charm.cat_surface import (
+from cat_surface_gpu import (
     read_gifti_mesh,
     run_cat_surface_gpu_pipeline,
 )

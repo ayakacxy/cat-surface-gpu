@@ -1,8 +1,10 @@
 """CAT 曲面 GPU 总入口的参数合同测试。"""
 
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 import pytest
 
-from fast_charm.cat_surface import run_cat_surface_gpu_pipeline
+from cat_surface_gpu import run_cat_surface_gpu_pipeline
 
 
 @pytest.mark.parametrize("thread_count", (0, 257))

@@ -12,7 +12,7 @@ import time
 
 import numpy as np
 
-from fast_charm.cat_surface.surface_stencil import SurfaceStencil
+from cat_surface_gpu.surface_stencil import SurfaceStencil
 
 
 _MAP_HEADER = struct.Struct("<i")

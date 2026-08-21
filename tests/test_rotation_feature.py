@@ -9,7 +9,7 @@ from collections import defaultdict
 import numpy as np
 import torch
 
-from fast_charm.cat_surface.rotation_feature import (
+from cat_surface_gpu.rotation_feature import (
     _system_entries,
     compute_rotation_feature,
 )
