@@ -104,4 +104,5 @@ rotation feature 等 helper。C 源码和二进制接口说明放在 `tools/cat_
 不能被本仓库的许可证声明覆盖，使用者需要自行取得并遵守对应条款。
 
 作者和 AI 辅助贡献说明见 `AUTHORS.md`；上游版本、发布范围和排除项见
-`docs/RELEASE_SCOPE.md`。
+`docs/RELEASE_SCOPE.md`。GitHub 官方 `@codex` PR 协作流程见
+`docs/CODEX-GITHUB-WORKFLOW.md`。
