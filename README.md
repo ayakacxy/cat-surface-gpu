@@ -5,11 +5,14 @@
 GPU-accelerated `CAT_Surf2Sphere` and `CAT_SurfWarp`-compatible surface registration.
 
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/ayakacxy/cat-surface-gpu?display_name=tag&sort=semver)](https://github.com/ayakacxy/cat-surface-gpu/releases/latest)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB.svg?logo=python&logoColor=white)](pyproject.toml)
 [![CUDA 12.6 tested](https://img.shields.io/badge/CUDA-12.6-76B900.svg?logo=nvidia&logoColor=white)](BENCHMARKS.md)
 [![Linux x86-64](https://img.shields.io/badge/platform-Linux%20x86--64-lightgrey.svg)](bin/linux-x86_64)
 
 [简体中文](README.zh-CN.md) · [Benchmarks](BENCHMARKS.md) · [Upstream credits](THIRD_PARTY_NOTICES.md)
+
+⚡ **GPU-accelerated** · 🧠 **Surface registration** · 🧪 **Reference-checked** · 📦 **Ready-to-run binaries**
 
 </div>
 
@@ -20,7 +23,7 @@ CAT-Surface GPU provides two optimized components for the cortical-surface regis
 
 The CPU reference path remains explicit. Requesting CUDA without a usable GPU or requesting Triton without a working kernel raises an error; the implementation does not silently fall back to CPU.
 
-## Performance at a glance
+## ⚡ Performance at a glance
 
 Measured on an NVIDIA GeForce RTX 2080 Ti with Python 3.11, PyTorch `2.6.0+cu126`, and Triton `3.2.0`. Every comparison uses the same input, parameters, output topology, and an explicit vertex-error contract.
 
@@ -41,7 +44,7 @@ With the SimNIBS default two-hemisphere schedule, the measured GPU wall time was
 
 Final triangle arrays were exact. Final LH/RH `sphere.reg` maximum vertex errors were `1.38e-6` and `1.81e-4`, both below the `1e-3` acceptance threshold. See [BENCHMARKS.md](BENCHMARKS.md) for hardware, shapes, parameters, timing boundaries, stage profiles, and numerical results.
 
-## Requirements
+## 🧩 Requirements
 
 - Linux x86-64
 - NVIDIA GPU with a CUDA-compatible driver
@@ -51,7 +54,7 @@ Final triangle arrays were exact. Final LH/RH `sphere.reg` maximum vertex errors
 
 The repository includes stripped Linux x86-64 CPU reference/helper binaries requiring glibc 2.29 or newer. Other platforms can use the Python implementation but must rebuild the CAT-Surface reference and helper programs from source.
 
-## Conda installation
+## 🐍 Conda installation
 
 Clone the repository and create the base environment:
 
@@ -91,7 +94,7 @@ python -m pytest -q
 
 CPU-only test collection is supported, but CUDA tests are skipped when no GPU is visible. GPU performance and numerical claims require a real CUDA run.
 
-## Quick start: `CAT_Surf2Sphere`
+## 🌐 Quick start: `CAT_Surf2Sphere`
 
 The optimized path uses the bundled upstream CPU reference for the first five stages and runs the 4,999 area-smoothing sweeps on CUDA. No iteration is removed.
 
@@ -126,7 +129,7 @@ python tools/benchmark_cat_surf2sphere_gpu.py \
   --max-p99-error 1e-3
 ```
 
-## Quick start: `CAT_SurfWarp`
+## 🧭 Quick start: `CAT_SurfWarp`
 
 The full registration runner includes input/output, initial rotation, DARTEL, `-avg`, and GIFTI writing in its reported wall time.
 
@@ -153,7 +156,7 @@ python tools/run_cat_surface_gpu_pipeline.py \
 
 Use `tools/benchmark_cat_surface_end_to_end.py` to compare this path against the bundled `bin/linux-x86_64/CAT_SurfWarp` CPU reference on the same inputs.
 
-## Bundled Linux binaries
+## 📦 Bundled Linux binaries
 
 | File | Purpose |
 | --- | --- |
@@ -164,7 +167,7 @@ Use `tools/benchmark_cat_surface_end_to_end.py` to compare this path against the
 
 All four files are stripped x86-64 ELF executables built from [CAT-Surface commit `628b6851`](https://github.com/ChristianGaser/CAT-Surface/tree/628b6851d8638f3ab773cd25c0ec406d0ec61ede) with `-O2 -fPIC`. They link only to glibc, libm, and pthread at runtime. Checksums are in [`bin/linux-x86_64/SHA256SUMS`](bin/linux-x86_64/SHA256SUMS). Source files for the two helpers are available in [`tools/cat_surface_c/`](tools/cat_surface_c/).
 
-## Numerical contract
+## 🎯 Numerical contract
 
 - Mesh topology must match the CPU reference exactly.
 - `CAT_Surf2Sphere` ordered scheduling preserves upstream vertex dependencies and executes 4,999 sweeps for `stop_at=10`.
@@ -178,7 +181,7 @@ The installed public Python namespace is `cat_surface_gpu`:
 from cat_surface_gpu import run_cat_surf2sphere_gpu, run_cat_surface_gpu_pipeline
 ```
 
-## Repository layout
+## 🗂️ Repository layout
 
 ```text
 src/cat_surface_gpu/          Public Python API
@@ -190,7 +193,7 @@ bin/linux-x86_64/             Bundled reference/helper executables
 BENCHMARKS.md                 Detailed performance and accuracy report
 ```
 
-## Credits and license
+## 🙏 Credits and license
 
 This project builds on the original [CAT-Surface](https://github.com/ChristianGaser/CAT-Surface) implementation by Christian Gaser and on the CAT surface-registration workflow used by [SimNIBS](https://github.com/simnibs/simnibs). Their work, including the upstream DARTEL implementation and surface I/O stack, made this acceleration possible. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for exact source and license information.
 

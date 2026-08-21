@@ -5,11 +5,14 @@
 面向 `CAT_Surf2Sphere` 与 `CAT_SurfWarp` 兼容曲面配准链路的 GPU 加速实现。
 
 [![许可证：GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
+[![正式版本](https://img.shields.io/github/v/release/ayakacxy/cat-surface-gpu?display_name=tag&sort=semver)](https://github.com/ayakacxy/cat-surface-gpu/releases/latest)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB.svg?logo=python&logoColor=white)](pyproject.toml)
 [![已测试 CUDA 12.6](https://img.shields.io/badge/CUDA-12.6-76B900.svg?logo=nvidia&logoColor=white)](BENCHMARKS.md)
 [![Linux x86-64](https://img.shields.io/badge/platform-Linux%20x86--64-lightgrey.svg)](bin/linux-x86_64)
 
 [English](README.md) · [详细性能报告](BENCHMARKS.md) · [上游致谢](THIRD_PARTY_NOTICES.md)
+
+⚡ **GPU 加速** · 🧠 **曲面配准** · 🧪 **Reference 验证** · 📦 **开箱即用二进制**
 
 </div>
 
@@ -20,7 +23,7 @@
 
 CPU reference 始终显式保留。请求 CUDA 但 GPU 不可用，或请求 Triton 但 kernel 失败时，程序会直接报错，不会静默回退到 CPU。
 
-## 性能概览
+## ⚡ 性能概览
 
 测试平台为 NVIDIA GeForce RTX 2080 Ti、Python 3.11、PyTorch `2.6.0+cu126` 和 Triton `3.2.0`。所有 A/B 均使用同一输入、参数、输出拓扑和显式顶点误差合同。
 
@@ -41,7 +44,7 @@ CPU reference 始终显式保留。请求 CUDA 但 GPU 不可用，或请求 Tri
 
 最终 faces 逐元素一致；LH/RH `sphere.reg` 最大顶点误差分别为 `1.38e-6` 和 `1.81e-4`，均低于 `1e-3`。完整硬件、形状、参数、计时边界和阶段热点见 [BENCHMARKS.md](BENCHMARKS.md)。
 
-## Conda 环境安装
+## 🐍 Conda 环境安装
 
 ```bash
 git clone https://github.com/ayakacxy/cat-surface-gpu.git
@@ -79,7 +82,7 @@ python -m pytest -q
 
 没有 GPU 时可以运行 CPU 单元测试，CUDA 测试会跳过；不能据此声称 GPU 性能或正确性已经验证。
 
-## 运行 `CAT_Surf2Sphere`
+## 🌐 运行 `CAT_Surf2Sphere`
 
 ```bash
 python tools/run_cat_surf2sphere_gpu.py \
@@ -112,7 +115,7 @@ python tools/benchmark_cat_surf2sphere_gpu.py \
   --max-p99-error 1e-3
 ```
 
-## 运行 `CAT_SurfWarp`
+## 🧭 运行 `CAT_SurfWarp`
 
 ```bash
 python tools/run_cat_surface_gpu_pipeline.py \
@@ -137,7 +140,7 @@ python tools/run_cat_surface_gpu_pipeline.py \
 
 使用 `tools/benchmark_cat_surface_end_to_end.py` 可以在同一输入上，将 GPU pipeline 与仓库内 `bin/linux-x86_64/CAT_SurfWarp` CPU reference 做完整 A/B。
 
-## 仓库内二进制
+## 📦 仓库内二进制
 
 `bin/linux-x86_64/` 包含四个已经剥离调试信息的 x86-64 ELF：
 
@@ -150,7 +153,7 @@ python tools/run_cat_surface_gpu_pipeline.py \
 
 四个程序均基于 [CAT-Surface commit `628b6851`](https://github.com/ChristianGaser/CAT-Surface/tree/628b6851d8638f3ab773cd25c0ec406d0ec61ede)，使用 `-O2 -fPIC` 构建；运行时只链接 glibc、libm 和 pthread，要求 glibc 2.29 或更新版本。SHA-256 见 [`bin/linux-x86_64/SHA256SUMS`](bin/linux-x86_64/SHA256SUMS)，两个 helper 的源码位于 [`tools/cat_surface_c/`](tools/cat_surface_c/)。
 
-## 数值合同
+## 🎯 数值合同
 
 - faces/拓扑必须与 CPU reference 完全一致；
 - `CAT_Surf2Sphere stop_at=10` 保持官方 4,999 次 sweep；
@@ -164,7 +167,7 @@ python tools/run_cat_surface_gpu_pipeline.py \
 from cat_surface_gpu import run_cat_surf2sphere_gpu, run_cat_surface_gpu_pipeline
 ```
 
-## 上游致谢和许可证
+## 🙏 上游致谢和许可证
 
 本项目建立在 Christian Gaser 开发的 [CAT-Surface](https://github.com/ChristianGaser/CAT-Surface) 以及 [SimNIBS](https://github.com/simnibs/simnibs) 使用的 CAT 曲面配准流程之上。CAT-Surface 的 DARTEL、曲面 I/O 和网格处理实现是本项目能够完成等价 GPU 加速的基础。完整来源和许可证说明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
