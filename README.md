@@ -12,7 +12,7 @@ GPU-accelerated `CAT_Surf2Sphere` and `CAT_SurfWarp` surface registration, imple
 [![CUDA 12.6 tested](https://img.shields.io/badge/CUDA-12.6-76B900.svg?logo=nvidia&logoColor=white)](docs/RELEASE_v0.2.0.md)
 [![Linux x86-64](https://img.shields.io/badge/platform-Linux%20x86--64-lightgrey.svg)](docs/IMPLEMENTATION.md)
 
-[简体中文](README.zh-CN.md) · [Documentation](docs/README.md) · [Benchmarks](docs/BENCHMARKS.md) · [Build from source](docs/BUILDING.md) · [Upstream credits](THIRD_PARTY_NOTICES.md)
+[简体中文](README.zh-CN.md) · [Documentation](docs/README.md) · [Benchmarks](docs/BENCHMARKS_v0.2.0.md) · [Build from source](docs/BUILDING.md) · [Upstream credits](THIRD_PARTY_NOTICES.md)
 
 ⚡ **GPU-accelerated** · 🧠 **Surface registration** · 🧪 **CUDA-tested** · 📦 **Python package**
 
@@ -27,7 +27,17 @@ Version **0.2.0** implements these operations in Python, using NumPy/Numba for C
 
 ## ⚡ Validation and performance
 
-The v0.2.0 checks were run on an NVIDIA GeForce RTX 2080 Ti with Python 3.11 and CUDA 12.6:
+Measured on an NVIDIA GeForce RTX 2080 Ti with Python 3.11 and CUDA 12.6. Each v0.2.0 input has 163,842 vertices and 327,680 triangles:
+
+| Component | CPU median | GPU median | CPU/GPU time ratio | Max coordinate difference |
+| --- | ---: | ---: | ---: | ---: |
+| `CAT_Surf2Sphere` | 216.722 s | 10.340 s | 20.96x | 0.057757 |
+| `CAT_SurfWarp`, PCG (default) | 182.182 s | 32.550 s | 5.60x | 0.166157 |
+| `CAT_SurfWarp`, FMG | 182.182 s | 164.697 s | 1.11x | 0.165802 |
+
+Medians come from three complete command runs in fresh processes with populated disk caches, including startup, input/output, and computation. The CPU reference is CAT-Surface `b0c2aa23` using FMG. The default GPU PCG comparison includes solver differences; the outputs are not numerically identical. Error values use the GIFTI coordinate units. See [v0.2.0 benchmarks](docs/BENCHMARKS_v0.2.0.md) for ranges, first-run costs, all numerical differences, and reproduction commands.
+
+The release also passed these checks:
 
 | Check | Result |
 | --- | --- |
@@ -36,7 +46,7 @@ The v0.2.0 checks were run on an NVIDIA GeForce RTX 2080 Ti with Python 3.11 and
 | Mesh size | 163,842 vertices and 327,680 triangles per input |
 | Output checks | Finite coordinates and unchanged triangle arrays |
 
-These checks establish that the released package runs the tested workflows. They do not provide a new speedup measurement. See the [v0.2.0 release notes](docs/RELEASE_v0.2.0.md) and [validation record](docs/validation-v0.2.0.json).
+These checks establish that the released package runs the tested workflows. See the [v0.2.0 release notes](docs/RELEASE_v0.2.0.md) and [validation record](docs/validation-v0.2.0.json).
 
 The following measurements belong to **v0.1.0**, which used PyTorch/Triton and CPU helper programs:
 

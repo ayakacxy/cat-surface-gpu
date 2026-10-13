@@ -8,6 +8,8 @@ On 2026-10-13, all 57 tests passed on an RTX 2080 Ti, including eight CUDA tests
 
 The [machine-readable record](validation-v0.2.0.json) includes input and source hashes, dependency versions, parameters, and results. These checks cover the installed workflow on the stated templates; they do not establish accuracy across subjects or a speedup over the official C implementation. Separate zero-residual regression tests cover the PCG division-by-zero fix.
 
+The subsequent [v0.2.0 benchmarks](BENCHMARKS_v0.2.0.md) measure complete CPU/GPU commands using the same inputs and report coordinate differences against the pinned C reference. Their [JSON record](benchmark-v0.2.0.json) includes the individual measurements and parameters.
+
 ## Record the version and environment
 
 For v0.2.0, record:

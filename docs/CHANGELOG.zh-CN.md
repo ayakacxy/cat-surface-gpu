@@ -8,6 +8,7 @@
 
 ### 新增与调整
 
+- 发布后补充使用相同输入的 CPU/GPU 重复计时、输出比较，以及可复现的基准脚本。
 - 将 PyTorch/Triton 实现及随包 CAT 可执行程序替换为使用 NumPy、Numba 和 CuPy 的原生 Python 实现。
 - 新增 NumPy/Numba 几何与拓扑计算、CuPy CUDA 内核、type-5 深度特征、初始旋转、球面重采样及 DARTEL 配准。
 - 固定 CAT-Surface 参考版本从 `628b6851` 更新为 `b0c2aa23`。

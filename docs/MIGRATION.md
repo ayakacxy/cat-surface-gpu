@@ -36,6 +36,6 @@ Replace `run_cat_surf2sphere_gpu` with `surf_to_sphere_cupy` and `run_cat_surfac
 
 Both the upstream source revision and the implementation changed. The default v0.2.0 DARTEL solver uses 40 PCG iterations, whereas the official reference uses FMG. Keep v0.1.0 thresholds and timings attached to v0.1.0; establish new tolerances from same-input comparisons against the v0.2.0 reference revision.
 
-The historical 55.2573-second bilateral measurement describes the v0.1.0 CAT registration chain. A separate benchmark is needed to report v0.2.0 performance.
+The historical 55.2573-second bilateral measurement describes the v0.1.0 CAT registration chain. Measured v0.2.0 command timings and output differences are recorded in the [current benchmarks](BENCHMARKS_v0.2.0.md).
 
 [Documentation index](README.md) · [Project README](../README.md)

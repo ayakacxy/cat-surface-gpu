@@ -5,6 +5,7 @@
 This directory contains the detailed project, validation, and community documentation.
 
 - Implementation and Python API: [English](IMPLEMENTATION.md) · [简体中文](IMPLEMENTATION.zh-CN.md)
+- Performance and output comparisons — v0.2.0: [English](BENCHMARKS_v0.2.0.md) · [简体中文](BENCHMARKS_v0.2.0.zh-CN.md)
 - Performance and accuracy benchmarks — v0.1.0: [English](BENCHMARKS.md) · [简体中文](BENCHMARKS.zh-CN.md)
 - Building and packaging: [English](BUILDING.md) · [简体中文](BUILDING.zh-CN.md)
 - Reproducibility and numerical comparisons: [English](REPRODUCIBILITY.md) · [简体中文](REPRODUCIBILITY.zh-CN.md)

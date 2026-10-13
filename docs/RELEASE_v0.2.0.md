@@ -19,6 +19,18 @@ The fixed CAT-Surface reference is `b0c2aa2395ea4957a331b9444fb54c7716b6572d`. R
 
 Numba and CuPy compile kernels at runtime. The `py3-none-any` wheel contains Python source; the full workflow still requires a compatible NVIDIA GPU and CuPy/CUDA installation. Historical v0.1.0 benchmarks describe that version only.
 
+### Performance
+
+The released wheel was measured against the pinned CPU reference on full fsaverage templates. Three fresh-process runs with populated disk caches included startup, reading, computation, and writing:
+
+| Component | CPU median | GPU median | CPU/GPU time ratio | Max coordinate difference |
+| --- | ---: | ---: | ---: | ---: |
+| `CAT_Surf2Sphere` | 216.722 s | 10.340 s | 20.96x | 0.057757 |
+| `CAT_SurfWarp`, PCG (default) | 182.182 s | 32.550 s | 5.60x | 0.166157 |
+| `CAT_SurfWarp`, FMG | 182.182 s | 164.697 s | 1.11x | 0.165802 |
+
+CPU uses FMG; the default GPU PCG ratio includes solver differences. The listed errors are per-coordinate absolute differences in GIFTI units, with the largest value across three comparisons. [Complete results and reproduction instructions](BENCHMARKS_v0.2.0.md) report ranges, first-run costs, and vertex distances. These measurements were added after release and do not establish equivalent anatomical registration accuracy.
+
 ### Verification
 
 - RTX 2080 Ti test suite: **57 passed**, including eight CUDA tests, with no skips
@@ -26,7 +38,7 @@ Numba and CuPy compile kernels at runtime. The `py3-none-any` wheel contains Pyt
 - Each output retained **163,842 vertices and 327,680 triangles**, with finite coordinates, unchanged triangle arrays, and no zero-area triangles
 - Wheel and source contents, Python source hashes, CLI entry points, and release checksums verified
 
-The [validation record](https://github.com/ayakacxy/cat-surface-gpu/blob/v0.2.0/docs/validation-v0.2.0.json) includes the environment, input hashes, and settings. These checks cover the stated templates; they do not establish accuracy across subjects or a speedup over the official C implementation.
+The [validation record](https://github.com/ayakacxy/cat-surface-gpu/blob/v0.2.0/docs/validation-v0.2.0.json) includes the environment, input hashes, and settings. The installation checks cover the stated templates; the separate performance comparison above reports complete command times and numerical differences.
 
 ### Installation
 

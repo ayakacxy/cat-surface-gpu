@@ -1,0 +1,563 @@
+{
+  "version": "0.2.0",
+  "environment": {
+    "python": "3.11.15",
+    "platform": "Linux-5.0.0-23-generic-x86_64-with-glibc2.31",
+    "dependencies": {
+      "numpy": "2.3.0",
+      "scipy": "1.17.1",
+      "numba": "0.64.0",
+      "nibabel": "5.3.3"
+    },
+    "cupy": "14.2.0",
+    "cuda_runtime": 12060,
+    "cuda_driver": 12080,
+    "gpu": "NVIDIA GeForce RTX 2080 Ti",
+    "threads_requested": 8,
+    "cpu": "Intel Xeon Gold 6230 @ 2.10 GHz, 2 sockets, 40 physical cores, 80 logical CPUs"
+  },
+  "inputs": {
+    "source_surface": {
+      "name": "lh.white.gii",
+      "sha256": "e1dd522805779bbd0eac32e4b5f5af132e0f3050006f8ea112d872cc092c2e3f"
+    },
+    "source_sphere": {
+      "name": "lh.sphere.gii",
+      "sha256": "54c6683de21fae484e8eb41e6060dd3e1ae8260922ede6e356e9083f65a8d04b"
+    },
+    "target_surface": {
+      "name": "rh.white.gii",
+      "sha256": "f369693f5448669ae891f34b83a5fd0ee1de89ecb699ba8879a23b7b611b1037"
+    },
+    "target_sphere": {
+      "name": "rh.sphere.gii",
+      "sha256": "54c6683de21fae484e8eb41e6060dd3e1ae8260922ede6e356e9083f65a8d04b"
+    }
+  },
+  "reference_programs": {
+    "sphere": {
+      "name": "CAT_Surf2Sphere",
+      "sha256": "0941b2bfc9d57835d65349f1cf48bc5958f7ff91a414bdfebb5bbf678d746f1d"
+    },
+    "warp": {
+      "name": "CAT_SurfWarp",
+      "sha256": "211fa9bf95046b36bb936ebf31a7ae41b2f0bba42dda01c92a9b777dce52a666"
+    }
+  },
+  "timing_scope": "Fresh process launch through exit: interpreter/imports, input loading, CPU preparation, CUDA setup, compilation/cache loading, computation, transfers, GIFTI writing. Validation is outside the timed command. Reference compilation and wheel installation are excluded.",
+  "summary": {
+    "sphere": {
+      "cpu": {
+        "repeats": 3,
+        "median_seconds": 216.72243088390678,
+        "min_seconds": 212.92164021823555,
+        "max_seconds": 263.9686006642878
+      },
+      "cupy": {
+        "repeats": 3,
+        "median_seconds": 10.339662502519786,
+        "min_seconds": 9.906730022281408,
+        "max_seconds": 13.642234295606613,
+        "cpu_to_gpu_median_time_ratio": 20.96030028360126
+      }
+    },
+    "warp": {
+      "cpu": {
+        "repeats": 3,
+        "median_seconds": 182.181680415757,
+        "min_seconds": 180.6061513060704,
+        "max_seconds": 186.2247752258554
+      },
+      "fmg": {
+        "repeats": 3,
+        "median_seconds": 164.69658616092056,
+        "min_seconds": 129.9264583941549,
+        "max_seconds": 179.93942583538592,
+        "cpu_to_gpu_median_time_ratio": 1.1061654929371287
+      },
+      "pcg": {
+        "repeats": 3,
+        "median_seconds": 32.549908213317394,
+        "min_seconds": 28.074815823696554,
+        "max_seconds": 35.514140780083835,
+        "cpu_to_gpu_median_time_ratio": 5.596995211839633
+      }
+    }
+  },
+  "comparisons": [
+    {
+      "faces_exact": true,
+      "finite": true,
+      "vertices": 163842,
+      "triangles": 327680,
+      "coordinate_absolute_difference": {
+        "max": 0.05775737762451172,
+        "mean": 0.018752206285373583,
+        "p99": 0.05011749267578125
+      },
+      "vertex_euclidean_distance": {
+        "max": 0.06241582655474795,
+        "mean": 0.036490756725317076,
+        "p99": 0.061337181080315564
+      },
+      "cpu_zero_area_triangles": 0,
+      "gpu_zero_area_triangles": 0,
+      "component": "sphere",
+      "backend": "cupy",
+      "repeat": 1
+    },
+    {
+      "faces_exact": true,
+      "finite": true,
+      "vertices": 163842,
+      "triangles": 327680,
+      "coordinate_absolute_difference": {
+        "max": 0.1661565601825714,
+        "mean": 0.012806707059436458,
+        "p99": 0.09652852918952703
+      },
+      "vertex_euclidean_distance": {
+        "max": 0.16664914179248055,
+        "mean": 0.027568956590684812,
+        "p99": 0.12217915770536003
+      },
+      "cpu_zero_area_triangles": 0,
+      "gpu_zero_area_triangles": 0,
+      "component": "warp",
+      "backend": "pcg",
+      "repeat": 1
+    },
+    {
+      "faces_exact": true,
+      "finite": true,
+      "vertices": 163842,
+      "triangles": 327680,
+      "coordinate_absolute_difference": {
+        "max": 0.16580220684409142,
+        "mean": 0.01248296732255406,
+        "p99": 0.09541450347751379
+      },
+      "vertex_euclidean_distance": {
+        "max": 0.16634531470223604,
+        "mean": 0.026877849286467945,
+        "p99": 0.1220874568254916
+      },
+      "cpu_zero_area_triangles": 0,
+      "gpu_zero_area_triangles": 0,
+      "component": "warp",
+      "backend": "fmg",
+      "repeat": 1
+    },
+    {
+      "faces_exact": true,
+      "finite": true,
+      "vertices": 163842,
+      "triangles": 327680,
+      "coordinate_absolute_difference": {
+        "max": 0.05775737762451172,
+        "mean": 0.018752206285373583,
+        "p99": 0.05011749267578125
+      },
+      "vertex_euclidean_distance": {
+        "max": 0.06241582655474795,
+        "mean": 0.036490756725317076,
+        "p99": 0.061337181080315564
+      },
+      "cpu_zero_area_triangles": 0,
+      "gpu_zero_area_triangles": 0,
+      "component": "sphere",
+      "backend": "cupy",
+      "repeat": 2
+    },
+    {
+      "faces_exact": true,
+      "finite": true,
+      "vertices": 163842,
+      "triangles": 327680,
+      "coordinate_absolute_difference": {
+        "max": 0.1661565601825714,
+        "mean": 0.012806707059436458,
+        "p99": 0.09652852918952703
+      },
+      "vertex_euclidean_distance": {
+        "max": 0.16664914179248055,
+        "mean": 0.027568956590684812,
+        "p99": 0.12217915770536003
+      },
+      "cpu_zero_area_triangles": 0,
+      "gpu_zero_area_triangles": 0,
+      "component": "warp",
+      "backend": "pcg",
+      "repeat": 2
+    },
+    {
+      "faces_exact": true,
+      "finite": true,
+      "vertices": 163842,
+      "triangles": 327680,
+      "coordinate_absolute_difference": {
+        "max": 0.16580220684409142,
+        "mean": 0.01248296732255406,
+        "p99": 0.09541450347751379
+      },
+      "vertex_euclidean_distance": {
+        "max": 0.16634531470223604,
+        "mean": 0.026877849286467945,
+        "p99": 0.1220874568254916
+      },
+      "cpu_zero_area_triangles": 0,
+      "gpu_zero_area_triangles": 0,
+      "component": "warp",
+      "backend": "fmg",
+      "repeat": 2
+    },
+    {
+      "faces_exact": true,
+      "finite": true,
+      "vertices": 163842,
+      "triangles": 327680,
+      "coordinate_absolute_difference": {
+        "max": 0.05775737762451172,
+        "mean": 0.018752206285373583,
+        "p99": 0.05011749267578125
+      },
+      "vertex_euclidean_distance": {
+        "max": 0.06241582655474795,
+        "mean": 0.036490756725317076,
+        "p99": 0.061337181080315564
+      },
+      "cpu_zero_area_triangles": 0,
+      "gpu_zero_area_triangles": 0,
+      "component": "sphere",
+      "backend": "cupy",
+      "repeat": 3
+    },
+    {
+      "faces_exact": true,
+      "finite": true,
+      "vertices": 163842,
+      "triangles": 327680,
+      "coordinate_absolute_difference": {
+        "max": 0.1661565601825714,
+        "mean": 0.012806707059436458,
+        "p99": 0.09652852918952703
+      },
+      "vertex_euclidean_distance": {
+        "max": 0.16664914179248055,
+        "mean": 0.027568956590684812,
+        "p99": 0.12217915770536003
+      },
+      "cpu_zero_area_triangles": 0,
+      "gpu_zero_area_triangles": 0,
+      "component": "warp",
+      "backend": "pcg",
+      "repeat": 3
+    },
+    {
+      "faces_exact": true,
+      "finite": true,
+      "vertices": 163842,
+      "triangles": 327680,
+      "coordinate_absolute_difference": {
+        "max": 0.16580220684409142,
+        "mean": 0.01248296732255406,
+        "p99": 0.09541450347751379
+      },
+      "vertex_euclidean_distance": {
+        "max": 0.16634531470223604,
+        "mean": 0.026877849286467945,
+        "p99": 0.1220874568254916
+      },
+      "cpu_zero_area_triangles": 0,
+      "gpu_zero_area_triangles": 0,
+      "component": "warp",
+      "backend": "fmg",
+      "repeat": 3
+    }
+  ],
+  "inputs_unchanged": true,
+  "numerical_note": "CPU uses upstream FMG. Default GPU PCG and the Python FMG implementation can follow different numerical paths. Elapsed-time ratios alone do not establish equivalent registration accuracy. Coordinate units are those stored in the GIFTI files.",
+  "date": "2026-10-13",
+  "gpu_runtime_source_sha256": {
+    "__init__.py": "ceba6a81a7bd9a742395ce87dda3690ffb5b3500463fa46100dea0b0b2e26db6",
+    "cli.py": "f0bb6db00891e476b410b2c85ad1b7b9d0ca6dc4691f3a01a9de71fbd444639a",
+    "dartel.py": "3b508fcaee1e6bf8c449324030bd5bf4ea56e614e8557717e172ddfdfe6f88f3",
+    "features.py": "df86fc11a8d96e9e60e9873c0c3a231bb8a7da86e745613582a510c1185f8048",
+    "geometry.py": "c3a231e38e64c299b6302e8ab268b045a1d2991374390d46ec771cf3c708c296",
+    "io.py": "a0c4bbafe66139619caad6786172e1a78865352cd0a4ac6d6410db349d65cec3",
+    "mapping.py": "1c4b2519f08bd3e9d3d83b848831320b697ebb5a2f496c5f69a27966d66581d0",
+    "parameters.py": "2b11f8cb02a116f4903b624d57722123c709b8913ae45c9542f8b06a811f8da0",
+    "resampling.py": "35bfbbeabd781ccd96e4ed3bb90c6c4b1c8fc44ef00bea9d622d33f8fa7d71ff",
+    "rotation.py": "df20eb5260886419f51c792a70c357a54bc8f4a800cb40b6908938398484e727",
+    "surf2sphere.py": "d54f86087c2c3008e04db0cd89fc17e9895aeec467ac404819de11a59244661a",
+    "surfwarp.py": "89756dc239b748b619e071042f52d65ac709641709719407ac5826c5510d9c36",
+    "topology.py": "c0da500496360a0c79bbcabd7ae8192896e1e9deba9097756079e1dd4201e96c"
+  },
+  "gpu_release_wheel_sha256": "799ef60985ef9b610dc81c7f9ead8e542721edcf20051ccc94edd9b016b3a2be",
+  "reference_build": {
+    "upstream_commit": "b0c2aa2395ea4957a331b9444fb54c7716b6572d",
+    "CFLAGS": "-O2 -fPIC",
+    "configure": "--disable-shared --enable-static",
+    "compiler": "gcc (Ubuntu 9.4.0-1ubuntu1~20.04.2) 9.4.0"
+  },
+  "first_gpu_calls": {
+    "sphere-cupy": {
+      "wall_seconds": 17.766445360146463,
+      "user_cpu_seconds": 15.526096,
+      "system_cpu_seconds": 1.997217,
+      "max_rss_kib": 683932
+    },
+    "warp-pcg": {
+      "wall_seconds": 48.985343280248344,
+      "user_cpu_seconds": 69.770635,
+      "system_cpu_seconds": 1.7644790000000001,
+      "max_rss_kib": 1084608
+    },
+    "warp-fmg": {
+      "wall_seconds": 130.2081632083282,
+      "user_cpu_seconds": 150.440619,
+      "system_cpu_seconds": 1.6086079999999998,
+      "max_rss_kib": 982044
+    }
+  },
+  "cache_description": "New project-local Numba/CuPy/CUDA cache; setup imports and an integer-vector CUDA preflight occurred before the first GPU sphere call, without warming the surface kernels. PCG and then FMG registration follow and share this cache. Three measured rounds use fresh processes with these disk caches populated; input files are already cached by the OS. No cold filesystem measurement.",
+  "input_description": "Full fsaverage LH white surface for sphere generation; fixed LH white/sphere to fixed RH white/sphere for registration. Components timed separately, without a generated-sphere chain or bilateral concurrency.",
+  "measurement_order": [
+    "CPU before GPU in rounds 1 and 3",
+    "GPU before CPU in round 2"
+  ],
+  "parameters": {
+    "sphere": {
+      "stop_at": 10,
+      "actual_areal_sweeps": 4999
+    },
+    "warp": {
+      "steps": 2,
+      "runs": 2,
+      "average": true,
+      "rotate": true,
+      "map_size": [
+        512,
+        256
+      ],
+      "type5_features": true,
+      "dartel_updates_per_level": 3,
+      "loops": 6,
+      "mu": 0.125,
+      "mu_rate": 1.25,
+      "mu_change": 4,
+      "lambda": 0.0,
+      "lm_regularization": 0.001,
+      "curvature_fwhm": 5.0,
+      "surface_fwhm": 0.0,
+      "multires_levels": 0,
+      "resampled_triangles": 81920,
+      "cpu_solver": "FMG",
+      "gpu_solvers": [
+        "PCG, 40 iterations",
+        "FMG"
+      ],
+      "rotation_point_chunk": 16384
+    }
+  },
+  "measurements": {
+    "sphere": [
+      {
+        "name": "cpu-sphere-cpu-r1",
+        "repeat": 1,
+        "backend": "cpu",
+        "wall_seconds": 212.92164021823555,
+        "user_cpu_seconds": 212.526208,
+        "system_cpu_seconds": 0.37596799999999997,
+        "max_rss_kib": 291948
+      },
+      {
+        "name": "gpu-sphere-cupy-r1",
+        "repeat": 1,
+        "backend": "cupy",
+        "wall_seconds": 10.339662502519786,
+        "user_cpu_seconds": 7.977781,
+        "system_cpu_seconds": 2.059642,
+        "max_rss_kib": 634436
+      },
+      {
+        "name": "gpu-sphere-cupy-r2",
+        "repeat": 2,
+        "backend": "cupy",
+        "wall_seconds": 9.906730022281408,
+        "user_cpu_seconds": 7.764199,
+        "system_cpu_seconds": 1.826,
+        "max_rss_kib": 634100
+      },
+      {
+        "name": "cpu-sphere-cpu-r2",
+        "repeat": 2,
+        "backend": "cpu",
+        "wall_seconds": 216.72243088390678,
+        "user_cpu_seconds": 216.492641,
+        "system_cpu_seconds": 0.207977,
+        "max_rss_kib": 383016
+      },
+      {
+        "name": "cpu-sphere-cpu-r3",
+        "repeat": 3,
+        "backend": "cpu",
+        "wall_seconds": 263.9686006642878,
+        "user_cpu_seconds": 263.733145,
+        "system_cpu_seconds": 0.22399,
+        "max_rss_kib": 383028
+      },
+      {
+        "name": "gpu-sphere-cupy-r3",
+        "repeat": 3,
+        "backend": "cupy",
+        "wall_seconds": 13.642234295606613,
+        "user_cpu_seconds": 11.398842,
+        "system_cpu_seconds": 1.9087649999999998,
+        "max_rss_kib": 634672
+      }
+    ],
+    "warp": [
+      {
+        "name": "cpu-warp-cpu-r1",
+        "repeat": 1,
+        "backend": "cpu",
+        "wall_seconds": 182.181680415757,
+        "user_cpu_seconds": 237.814901,
+        "system_cpu_seconds": 0.40770999999999996,
+        "max_rss_kib": 381568
+      },
+      {
+        "name": "gpu-warp-pcg-r1",
+        "repeat": 1,
+        "backend": "pcg",
+        "wall_seconds": 32.549908213317394,
+        "user_cpu_seconds": 50.618823,
+        "system_cpu_seconds": 1.866871,
+        "max_rss_kib": 982316
+      },
+      {
+        "name": "gpu-warp-fmg-r1",
+        "repeat": 1,
+        "backend": "fmg",
+        "wall_seconds": 129.9264583941549,
+        "user_cpu_seconds": 147.03713,
+        "system_cpu_seconds": 1.4966249999999999,
+        "max_rss_kib": 982324
+      },
+      {
+        "name": "gpu-warp-pcg-r2",
+        "repeat": 2,
+        "backend": "pcg",
+        "wall_seconds": 28.074815823696554,
+        "user_cpu_seconds": 48.391139,
+        "system_cpu_seconds": 1.7163439999999999,
+        "max_rss_kib": 982432
+      },
+      {
+        "name": "gpu-warp-fmg-r2",
+        "repeat": 2,
+        "backend": "fmg",
+        "wall_seconds": 179.93942583538592,
+        "user_cpu_seconds": 200.734242,
+        "system_cpu_seconds": 2.036967,
+        "max_rss_kib": 982628
+      },
+      {
+        "name": "cpu-warp-cpu-r2",
+        "repeat": 2,
+        "backend": "cpu",
+        "wall_seconds": 186.2247752258554,
+        "user_cpu_seconds": 242.726223,
+        "system_cpu_seconds": 0.33991299999999997,
+        "max_rss_kib": 383028
+      },
+      {
+        "name": "cpu-warp-cpu-r3",
+        "repeat": 3,
+        "backend": "cpu",
+        "wall_seconds": 180.6061513060704,
+        "user_cpu_seconds": 236.908741,
+        "system_cpu_seconds": 0.312011,
+        "max_rss_kib": 383028
+      },
+      {
+        "name": "gpu-warp-pcg-r3",
+        "repeat": 3,
+        "backend": "pcg",
+        "wall_seconds": 35.514140780083835,
+        "user_cpu_seconds": 53.956424,
+        "system_cpu_seconds": 1.626141,
+        "max_rss_kib": 981640
+      },
+      {
+        "name": "gpu-warp-fmg-r3",
+        "repeat": 3,
+        "backend": "fmg",
+        "wall_seconds": 164.69658616092056,
+        "user_cpu_seconds": 182.515202,
+        "system_cpu_seconds": 1.934177,
+        "max_rss_kib": 981916
+      }
+    ]
+  },
+  "worst_output_differences": {
+    "sphere-cupy": {
+      "coordinate_absolute_difference": {
+        "max": 0.05775737762451172,
+        "mean": 0.018752206285373583,
+        "p99": 0.05011749267578125
+      },
+      "vertex_euclidean_distance": {
+        "max": 0.06241582655474795,
+        "mean": 0.036490756725317076,
+        "p99": 0.061337181080315564
+      }
+    },
+    "warp-pcg": {
+      "coordinate_absolute_difference": {
+        "max": 0.1661565601825714,
+        "mean": 0.012806707059436458,
+        "p99": 0.09652852918952703
+      },
+      "vertex_euclidean_distance": {
+        "max": 0.16664914179248055,
+        "mean": 0.027568956590684812,
+        "p99": 0.12217915770536003
+      }
+    },
+    "warp-fmg": {
+      "coordinate_absolute_difference": {
+        "max": 0.16580220684409142,
+        "mean": 0.01248296732255406,
+        "p99": 0.09541450347751379
+      },
+      "vertex_euclidean_distance": {
+        "max": 0.16634531470223604,
+        "mean": 0.026877849286467945,
+        "p99": 0.1220874568254916
+      }
+    }
+  },
+  "scope": "Elapsed-time comparison for the released v0.2.0 implementation on the stated templates. Output differences are reported without asserting equivalent anatomical registration accuracy. Different update order, solvers, and implementations can contribute to both timing and numerical differences.",
+  "status": "completed",
+  "repeatability": {
+    "cpu-sphere-cpu": {
+      "all_three_arrays_equal": true
+    },
+    "cpu-warp-cpu": {
+      "all_three_arrays_equal": true
+    },
+    "gpu-sphere-cupy": {
+      "all_three_arrays_equal": true
+    },
+    "gpu-warp-pcg": {
+      "all_three_arrays_equal": true
+    },
+    "gpu-warp-fmg": {
+      "all_three_arrays_equal": true
+    }
+  },
+  "clock_settings": "CPU and GPU clocks were not controlled by the benchmark.",
+  "reference_threading": "Unmodified C reference threading; Numba CPU work in the GPU commands was configured for 8 threads."
+}

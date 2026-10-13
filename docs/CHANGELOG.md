@@ -8,6 +8,7 @@ All notable changes are documented here.
 
 ### Added and changed
 
+- Added repeated same-input CPU/GPU command measurements, output comparisons, and a reproducible benchmark script in a documentation update after publication.
 - Replaced the PyTorch/Triton implementation and bundled CAT executables with a native Python implementation using NumPy, Numba, and CuPy.
 - Added NumPy/Numba geometry and topology routines, CuPy CUDA kernels, type-5 depth features, initial rotation, spherical resampling, and DARTEL registration.
 - Updated the fixed CAT-Surface reference from `628b6851` to `b0c2aa23`.

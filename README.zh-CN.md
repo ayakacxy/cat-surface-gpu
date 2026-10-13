@@ -12,7 +12,7 @@
 [![已测试 CUDA 12.6](https://img.shields.io/badge/CUDA-12.6-76B900.svg?logo=nvidia&logoColor=white)](docs/RELEASE_v0.2.0.zh-CN.md)
 [![Linux x86-64](https://img.shields.io/badge/platform-Linux%20x86--64-lightgrey.svg)](docs/IMPLEMENTATION.zh-CN.md)
 
-[English](README.md) · [文档目录](docs/README.zh-CN.md) · [详细性能报告](docs/BENCHMARKS.zh-CN.md) · [源码构建](docs/BUILDING.zh-CN.md) · [上游致谢](THIRD_PARTY_NOTICES.zh-CN.md)
+[English](README.md) · [文档目录](docs/README.zh-CN.md) · [详细性能报告](docs/BENCHMARKS_v0.2.0.zh-CN.md) · [源码构建](docs/BUILDING.zh-CN.md) · [上游致谢](THIRD_PARTY_NOTICES.zh-CN.md)
 
 ⚡ **GPU 加速** · 🧠 **曲面配准** · 🧪 **CUDA 实测** · 📦 **Python 软件包**
 
@@ -27,7 +27,17 @@
 
 ## ⚡ 验证与性能概览
 
-v0.2.0 在 NVIDIA GeForce RTX 2080 Ti、Python 3.11 和 CUDA 12.6 环境中完成了以下检查：
+在 NVIDIA GeForce RTX 2080 Ti、Python 3.11 和 CUDA 12.6 环境测量，每份 v0.2.0 输入包含 163,842 个顶点、327,680 个三角形：
+
+| 组件 | CPU 中位数 | GPU 中位数 | CPU/GPU 耗时比 | 最大逐坐标差 |
+| --- | ---: | ---: | ---: | ---: |
+| `CAT_Surf2Sphere` | 216.722 s | 10.340 s | 20.96x | 0.057757 |
+| `CAT_SurfWarp`，PCG（默认） | 182.182 s | 32.550 s | 5.60x | 0.166157 |
+| `CAT_SurfWarp`，FMG | 182.182 s | 164.697 s | 1.11x | 0.165802 |
+
+中位数来自三次完整命令运行，每次使用新进程，磁盘缓存已建立；计时包括启动、输入输出和计算。CPU 参考是使用 FMG 的 CAT-Surface `b0c2aa23`。默认 GPU PCG 的比较包含求解器差异，输出并非逐元素相同；误差沿用 GIFTI 坐标单位。耗时范围、首次运行成本、全部数值差异及复现命令见 [v0.2.0 基准](docs/BENCHMARKS_v0.2.0.zh-CN.md)。
+
+本版还通过了以下检查：
 
 | 检查项 | 结果 |
 | --- | --- |
@@ -36,7 +46,7 @@ v0.2.0 在 NVIDIA GeForce RTX 2080 Ti、Python 3.11 和 CUDA 12.6 环境中完�
 | 输入网格 | 每个输入 163,842 个顶点、327,680 个三角面 |
 | 输出检查 | 坐标均为有限值，三角面数组保持不变 |
 
-这些检查确认了发布包可以完成相应流程，本次不据此给出新版加速比。详情见 [v0.2.0 版本说明](docs/RELEASE_v0.2.0.zh-CN.md)和[验证记录](docs/validation-v0.2.0.json)。
+这些检查确认了发布包可以完成相应流程。详情见 [v0.2.0 版本说明](docs/RELEASE_v0.2.0.zh-CN.md)和[验证记录](docs/validation-v0.2.0.json)。
 
 以下是 **v0.1.0** 的历史数据，该版使用 PyTorch/Triton 和 CPU 辅助程序：
 
