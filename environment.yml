@@ -6,6 +6,8 @@ dependencies:
   - pip>=24
   - numpy>=1.24
   - nibabel>=5.0
+  - scipy>=1.10
+  - numba>=0.59
   - pytest>=8.0
   - packaging>=24
   - setuptools>=77

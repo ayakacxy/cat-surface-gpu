@@ -1,94 +1,82 @@
 #!/usr/bin/env python3
-"""Run deterministic repository and release-artifact checks."""
-
-# SPDX-License-Identifier: GPL-3.0-or-later
+"""检查源码和发布包，确保新版不依赖 CAT 外部程序。"""
 
 from __future__ import annotations
 
 import argparse
-import hashlib
+import ast
 from pathlib import Path
-import re
-import subprocess
-import sys
+import tomllib
 import zipfile
 
-
-REQUIRED_BINARIES = {
-    "CAT_Surf2Sphere",
-    "CAT_SurfWarp",
-    "cat_surface_rotation_depth",
-    "cat_surface_stencil_builder",
-}
-PUBLIC_SOURCE_GLOBS = ("src/**/*.py", "tests/**/*.py", "tools/**/*.py", "native/**/*.c")
-CJK_PATTERN = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
+FORBIDDEN_IMPORTS = {"flashcharm", "simnibs", "torch", "triton", "subprocess", "ctypes"}
 
 
-def check_english_only(root: Path) -> None:
-    """Reject CJK text from public source while allowing the Chinese README."""
-
-    failures: list[str] = []
-    for pattern in PUBLIC_SOURCE_GLOBS:
-        for path in root.glob(pattern):
-            if CJK_PATTERN.search(path.read_text(encoding="utf-8")):
-                failures.append(str(path.relative_to(root)))
-    if failures:
-        raise RuntimeError("CJK text found in public source: " + ", ".join(failures))
-
-
-def check_binaries(root: Path) -> None:
-    """Verify the committed Linux binaries against SHA256SUMS."""
-
-    directory = root / "bin" / "linux-x86_64"
-    expected = {}
-    for line in (directory / "SHA256SUMS").read_text(encoding="utf-8").splitlines():
-        digest, filename = line.split(maxsplit=1)
-        expected[filename.strip()] = digest
-    if set(expected) != REQUIRED_BINARIES:
-        raise RuntimeError(f"Unexpected checksum manifest entries: {sorted(expected)}")
-    for name, digest in expected.items():
-        actual = hashlib.sha256((directory / name).read_bytes()).hexdigest()
-        if actual != digest:
-            raise RuntimeError(f"SHA-256 mismatch for {name}")
+def check_source(root: Path) -> None:
+    """静态检查导入和语法，不运行 GPU，也不产生字节码缓存。"""
+    for path in sorted((root / "src" / "cat_surface_gpu").glob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                names = [item.name.split(".")[0] for item in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.level == 0:
+                names = [(node.module or "").split(".")[0]]
+            else:
+                continue
+            if FORBIDDEN_IMPORTS.intersection(names):
+                raise RuntimeError(f"Unexpected runtime dependency in {path}: {names}")
+    for directory in ("tests", "tools", "scripts"):
+        for path in (root / directory).glob("*.py"):
+            ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
 
 
-def check_wheel(path: Path) -> None:
-    """Verify a platform wheel contains entry points, notices, and native helpers."""
-
-    if "none-any" in path.name or "linux" not in path.name:
-        raise RuntimeError(f"Wheel must be Linux platform-specific: {path.name}")
+def check_wheel(path: Path, version: str) -> None:
+    """确认 wheel 为纯 Python 分发，包含许可和两条命令。"""
+    if not path.name.endswith("-py3-none-any.whl"):
+        raise RuntimeError(f"Expected a pure Python wheel: {path.name}")
     with zipfile.ZipFile(path) as archive:
         names = set(archive.namelist())
-        for binary in REQUIRED_BINARIES:
-            if not any(name.endswith(f"/bin/linux-x86_64/{binary}") for name in names):
-                raise RuntimeError(f"Wheel is missing {binary}")
-        required_suffixes = (
+        for name in names:
+            if "/bin/" in name or name.endswith((".so", ".dll", ".exe", ".pyc")):
+                raise RuntimeError(f"Unexpected compiled file: {name}")
+            if not name.endswith("/") and archive.read(name).startswith(b"\x7fELF"):
+                raise RuntimeError(f"Unexpected ELF file: {name}")
+        for module in ("surf2sphere", "surfwarp", "dartel", "features", "cli"):
+            if f"cat_surface_gpu/{module}.py" not in names:
+                raise RuntimeError(f"Missing module: {module}")
+        for suffix in (
             ".dist-info/entry_points.txt",
             ".dist-info/licenses/LICENSE",
             ".dist-info/licenses/THIRD_PARTY_NOTICES.md",
             ".dist-info/licenses/upstream/CAT-Surface-LICENSE.txt",
-        )
-        for suffix in required_suffixes:
+        ):
             if not any(name.endswith(suffix) for name in names):
-                raise RuntimeError(f"Wheel is missing {suffix}")
+                raise RuntimeError(f"Missing release file: {suffix}")
+        metadata_name = next(
+            name for name in names if name.endswith(".dist-info/METADATA")
+        )
+        metadata = archive.read(metadata_name).decode()
+        if f"Version: {version}\n" not in metadata:
+            raise RuntimeError("Wheel version differs from pyproject.toml")
+        entry_name = next(
+            name for name in names if name.endswith(".dist-info/entry_points.txt")
+        )
+        entries = archive.read(entry_name).decode()
+        for command in ("cat-surf2sphere-gpu", "cat-surfwarp-gpu"):
+            if command not in entries:
+                raise RuntimeError(f"Missing command: {command}")
 
 
 def main() -> int:
-    """Validate the checkout and an optional wheel."""
-
+    """校验源码以及可选 wheel。"""
     parser = argparse.ArgumentParser()
     parser.add_argument("--wheel", type=Path)
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
-    check_english_only(root)
-    check_binaries(root)
-    subprocess.run(
-        [sys.executable, "-m", "compileall", "-q", "src", "tests", "tools"],
-        cwd=root,
-        check=True,
-    )
+    version = tomllib.loads((root / "pyproject.toml").read_text())["project"]["version"]
+    check_source(root)
     if args.wheel:
-        check_wheel(args.wheel)
+        check_wheel(args.wheel, version)
     print("Release verification passed")
     return 0
 

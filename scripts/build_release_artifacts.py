@@ -1,25 +1,20 @@
 #!/usr/bin/env python3
-"""Assemble deterministic release archives, an SBOM, and checksums."""
-
-# SPDX-License-Identifier: GPL-3.0-or-later
+"""为 Python 分发生成依赖清单、固定上游源码和 SHA-256 校验文件。"""
 
 from __future__ import annotations
 
 import argparse
-import gzip
 import hashlib
 import json
 from pathlib import Path
 import shutil
-import subprocess
-import tarfile
-import tempfile
 import tomllib
 
+from packaging.requirements import Requirement
 
-def _sha256(path: Path) -> str:
-    """Return a file's SHA-256 digest."""
 
+def sha256(path: Path) -> str:
+    """分块计算文件摘要。"""
     digest = hashlib.sha256()
     with path.open("rb") as stream:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
@@ -27,83 +22,52 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _copy_release_tree(root: Path, destination: Path) -> None:
-    """Copy the runnable Linux bundle without local caches or private fixtures."""
-
-    files = (
-        "CITATION.cff",
-        "environment.yml",
-        "LICENSE",
-        "MANIFEST.in",
-        "pyproject.toml",
-        "README.md",
-        "README.zh-CN.md",
-        "setup.py",
-        "THIRD_PARTY_NOTICES.md",
-        "UPSTREAM.lock",
+def main() -> int:
+    """只处理指定版本的发布文件，不混入旧版或本地临时内容。"""
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--upstream-archive", type=Path, required=True)
+    parser.add_argument("--dist", type=Path, default=Path("dist/0.2.0"))
+    args = parser.parse_args()
+    root = Path(__file__).resolve().parents[1]
+    dist = args.dist.resolve()
+    project = tomllib.loads((root / "pyproject.toml").read_text())["project"]
+    version = project["version"]
+    lock = dict(
+        line.split("=", 1)
+        for line in (root / "UPSTREAM.lock").read_text().splitlines()
+        if line
     )
-    directories = ("bin", "docs", "native", "scripts", "src", "tools", "upstream")
-    destination.mkdir(parents=True)
-    for name in files:
-        shutil.copy2(root / name, destination / name)
-    for name in directories:
-        shutil.copytree(
-            root / name,
-            destination / name,
-            ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
-        )
-
-
-def _write_deterministic_tar(source: Path, output: Path, epoch: int) -> None:
-    """Create a gzip-compressed tar with normalized metadata."""
-
-    with output.open("wb") as raw_stream:
-        with gzip.GzipFile(
-            filename="", mode="wb", fileobj=raw_stream, mtime=epoch
-        ) as gzip_stream:
-            with tarfile.open(fileobj=gzip_stream, mode="w") as archive:
-                for path in sorted(source.rglob("*")):
-                    relative = path.relative_to(source.parent)
-                    info = archive.gettarinfo(str(path), arcname=str(relative))
-                    info.uid = 0
-                    info.gid = 0
-                    info.uname = "root"
-                    info.gname = "root"
-                    info.mtime = epoch
-                    if path.is_file():
-                        with path.open("rb") as stream:
-                            archive.addfile(info, stream)
-                    else:
-                        archive.addfile(info)
-
-
-def _write_sbom(root: Path, output: Path, version: str) -> None:
-    """Write a compact CycloneDX SBOM with dependency and binary hashes."""
-
-    project = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))[
-        "project"
+    if sha256(args.upstream_archive) != lock["CAT_SURFACE_ARCHIVE_SHA256"]:
+        raise RuntimeError("Upstream source archive does not match UPSTREAM.lock")
+    artifacts = [
+        dist / f"cat_surface_gpu-{version}-py3-none-any.whl",
+        dist / f"cat_surface_gpu-{version}.tar.gz",
     ]
+    if not all(path.is_file() for path in artifacts):
+        raise RuntimeError("Build the current wheel and source distribution first")
+    upstream = dist / f"CAT-Surface-{lock['CAT_SURFACE_COMMIT']}.tar.gz"
+    shutil.copy2(args.upstream_archive, upstream)
+    artifacts.append(upstream)
     components = []
-    for dependency in project["dependencies"]:
-        name = dependency.split("[", 1)[0].split(">", 1)[0].split("=", 1)[0]
-        components.append(
-            {
-                "type": "library",
-                "name": name,
-                "version": dependency[len(name) :].lstrip("=<>!~ ") or "unspecified",
-                "purl": f"pkg:pypi/{name.lower().replace('_', '-')}",
-            }
-        )
-    for binary in sorted((root / "bin" / "linux-x86_64").iterdir()):
-        if binary.name == "SHA256SUMS":
-            continue
-        components.append(
-            {
-                "type": "file",
-                "name": binary.name,
-                "hashes": [{"alg": "SHA-256", "content": _sha256(binary)}],
-            }
-        )
+    groups = {"runtime": project["dependencies"], **project["optional-dependencies"]}
+    for group, dependencies in groups.items():
+        for specification in dependencies:
+            requirement = Requirement(specification)
+            components.append(
+                {
+                    "type": "library",
+                    "name": requirement.name,
+                    "purl": f"pkg:pypi/{requirement.name.lower().replace('_', '-')}",
+                    "scope": "required" if group == "runtime" else "optional",
+                    "properties": [
+                        {
+                            "name": "dependency:specifier",
+                            "value": str(requirement.specifier),
+                        },
+                        {"name": "dependency:group", "value": group},
+                    ],
+                }
+            )
     document = {
         "bomFormat": "CycloneDX",
         "specVersion": "1.5",
@@ -118,74 +82,11 @@ def _write_sbom(root: Path, output: Path, version: str) -> None:
         },
         "components": components,
     }
-    output.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
-
-
-def main() -> int:
-    """Build release-adjacent artifacts after Python distributions exist."""
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--upstream-source", type=Path, required=True)
-    parser.add_argument("--dist", type=Path, default=Path("dist"))
-    args = parser.parse_args()
-    root = Path(__file__).resolve().parents[1]
-    dist = (root / args.dist).resolve() if not args.dist.is_absolute() else args.dist
-    project = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))[
-        "project"
-    ]
-    version = project["version"]
-    commit = subprocess.check_output(
-        ["git", "-C", str(args.upstream_source), "rev-parse", "HEAD"], text=True
-    ).strip()
-    lock = dict(
-        line.split("=", 1)
-        for line in (root / "UPSTREAM.lock").read_text(encoding="utf-8").splitlines()
-        if line
-    )
-    if commit != lock["CAT_SURFACE_COMMIT"]:
-        raise RuntimeError(
-            f"Upstream checkout is {commit}, expected {lock['CAT_SURFACE_COMMIT']}"
-        )
-    dist.mkdir(parents=True, exist_ok=True)
-    if not list(dist.glob("*.whl")) or not list(dist.glob("*.tar.gz")):
-        raise RuntimeError(
-            "Build the wheel and source distribution before release assembly"
-        )
-    epoch = int(
-        subprocess.check_output(
-            ["git", "show", "-s", "--format=%ct", "HEAD"], cwd=root, text=True
-        ).strip()
-    )
-    with tempfile.TemporaryDirectory(prefix="cat-surface-gpu-release-") as temp_name:
-        bundle = Path(temp_name) / f"cat-surface-gpu-{version}-linux-x86_64"
-        _copy_release_tree(root, bundle)
-        _write_deterministic_tar(
-            bundle,
-            dist / f"cat-surface-gpu-{version}-linux-x86_64.tar.gz",
-            epoch,
-        )
-    upstream_archive = dist / f"CAT-Surface-{commit}.tar.gz"
-    subprocess.run(
-        [
-            "git",
-            "-C",
-            str(args.upstream_source),
-            "archive",
-            "--format=tar.gz",
-            f"--prefix=CAT-Surface-{commit}/",
-            f"--output={upstream_archive}",
-            commit,
-        ],
-        check=True,
-    )
-    _write_sbom(root, dist / f"cat-surface-gpu-{version}.cdx.json", version)
-    checksum_path = dist / "SHA256SUMS"
-    artifacts = sorted(
-        path for path in dist.iterdir() if path.is_file() and path != checksum_path
-    )
-    checksum_path.write_text(
-        "".join(f"{_sha256(path)}  {path.name}\n" for path in artifacts),
-        encoding="utf-8",
+    sbom = dist / f"cat-surface-gpu-{version}.cdx.json"
+    sbom.write_text(json.dumps(document, indent=2) + "\n")
+    artifacts.append(sbom)
+    (dist / "SHA256SUMS").write_text(
+        "".join(f"{sha256(path)}  {path.name}\n" for path in sorted(artifacts))
     )
     print(f"Release artifacts written to {dist}")
     return 0

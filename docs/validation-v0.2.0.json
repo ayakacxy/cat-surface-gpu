@@ -1,0 +1,290 @@
+{
+  "date": "2026-10-13",
+  "package": "cat-surface-gpu",
+  "version": "0.2.0",
+  "validation": "Migration equality against the source FlashCHARM CAT Python modules",
+  "implementation_changes": [
+    "Preserve GIFTI pointset/triangle coordinate systems and metadata.",
+    "Avoid zero divided by zero in the PCG beta update when the residual is exactly zero; nonzero denominators and fixed iteration counts are unchanged.",
+    "Reject non-finite or exactly zero-area triangles before and after the surface algorithms; valid-input numerical operations are unchanged."
+  ],
+  "validation_repeats": 1,
+  "reference_source_sha256": {
+    "__init__.py": "b93b2a2fd4498339874ebcd94c111e924d106a2aa38dd683f45d5b7ebb188cf2",
+    "contracts.py": "150920446bf61adebf44d371c76130ce28e00d1680af0254515be8a0b5de44ff",
+    "dartel.py": "df71de002f8f6f5c07cbf7bf9d8d013aaee5474d2f7f7684a643747a929ca8b2",
+    "features.py": "96f21e80395e330215266d310a0d13b992a09674aaca63efb4ee19dabb2c0300",
+    "geometry.py": "2262eda7e70d2b1ee0f7e941dfc9c906ba173f3331271f1661d9e8bf32433826",
+    "io.py": "3127ada3e937e5797e33c9a641dd3967f4ede7b3484fe9790afad9c35834f6de",
+    "mapping.py": "1c4b2519f08bd3e9d3d83b848831320b697ebb5a2f496c5f69a27966d66581d0",
+    "resampling.py": "0949a84141794239b0ba8188ee26a9b01ed3573dbbe6177fb753de1d53c92aa0",
+    "rotation.py": "c44527b2468565f258063c39fa2e38cb88d98439044bd9e21feebee1c6a11dc8",
+    "surf2sphere.py": "b719941f74525db86fbaf3fd260fb7dbc9bd4e73ad4068f663aa0fe4eefe6925",
+    "surfwarp.py": "5b3ec962c5dba6739e2f868745d50d2127734e974d4a6784e18246e13f919afd",
+    "topology.py": "67ba0b7af9b9ed296437885afd66f239ae900f42c2eb3bfff1c383a96b873ab8"
+  },
+  "candidate_source_sha256": {
+    "__init__.py": "ceba6a81a7bd9a742395ce87dda3690ffb5b3500463fa46100dea0b0b2e26db6",
+    "cli.py": "f0bb6db00891e476b410b2c85ad1b7b9d0ca6dc4691f3a01a9de71fbd444639a",
+    "dartel.py": "3b508fcaee1e6bf8c449324030bd5bf4ea56e614e8557717e172ddfdfe6f88f3",
+    "features.py": "df86fc11a8d96e9e60e9873c0c3a231bb8a7da86e745613582a510c1185f8048",
+    "geometry.py": "c3a231e38e64c299b6302e8ab268b045a1d2991374390d46ec771cf3c708c296",
+    "io.py": "a0c4bbafe66139619caad6786172e1a78865352cd0a4ac6d6410db349d65cec3",
+    "mapping.py": "1c4b2519f08bd3e9d3d83b848831320b697ebb5a2f496c5f69a27966d66581d0",
+    "parameters.py": "2b11f8cb02a116f4903b624d57722123c709b8913ae45c9542f8b06a811f8da0",
+    "resampling.py": "35bfbbeabd781ccd96e4ed3bb90c6c4b1c8fc44ef00bea9d622d33f8fa7d71ff",
+    "rotation.py": "df20eb5260886419f51c792a70c357a54bc8f4a800cb40b6908938398484e727",
+    "surf2sphere.py": "d54f86087c2c3008e04db0cd89fc17e9895aeec467ac404819de11a59244661a",
+    "surfwarp.py": "89756dc239b748b619e071042f52d65ac709641709719407ac5826c5510d9c36",
+    "topology.py": "c0da500496360a0c79bbcabd7ae8192896e1e9deba9097756079e1dd4201e96c"
+  },
+  "status": "passed",
+  "geometry_validation": "Both migrated APIs completed with finite, nonzero-area triangle validation enabled on their inputs and outputs.",
+  "input_description": "Full fsaverage LH white surface for Surf2Sphere; LH white/sphere to RH white/sphere for non-identity SurfWarp",
+  "inputs": {
+    "lh.white.gii": {
+      "sha256": "e1dd522805779bbd0eac32e4b5f5af132e0f3050006f8ea112d872cc092c2e3f",
+      "vertices": 163842,
+      "faces": 327680
+    },
+    "lh.sphere.gii": {
+      "sha256": "54c6683de21fae484e8eb41e6060dd3e1ae8260922ede6e356e9083f65a8d04b",
+      "vertices": 163842,
+      "faces": 327680
+    },
+    "rh.white.gii": {
+      "sha256": "f369693f5448669ae891f34b83a5fd0ee1de89ecb699ba8879a23b7b611b1037",
+      "vertices": 163842,
+      "faces": 327680
+    },
+    "rh.sphere.gii": {
+      "sha256": "54c6683de21fae484e8eb41e6060dd3e1ae8260922ede6e356e9083f65a8d04b",
+      "vertices": 163842,
+      "faces": 327680
+    }
+  },
+  "parameters": {
+    "description": "Default scientific parameters; rotation batching explicitly set to 12288 points",
+    "surf2sphere": {
+      "stop_at": 10,
+      "verbose": false
+    },
+    "surfwarp": {
+      "rotate": true,
+      "average": true,
+      "code": 1,
+      "loop": 6,
+      "regularization_type": 1,
+      "curvature_types": [
+        5,
+        5,
+        2
+      ],
+      "mu_change": 4,
+      "multires_levels": 0,
+      "map_size": [
+        512,
+        256
+      ],
+      "resampled_triangles": 81920,
+      "steps": 2,
+      "runs": 2,
+      "mu_rate": 1.25,
+      "lambda_value": 0.0,
+      "mu": 0.125,
+      "lm_regularization": 0.001,
+      "curvature_fwhm": 5.0,
+      "surface_fwhm": 0.0,
+      "cycles": 3,
+      "iterations": 3
+    },
+    "solver": {
+      "solver_iterations": 40,
+      "solver_backend": "pcg",
+      "pcg_check_interval": 0,
+      "rotation_point_chunk": 12288
+    }
+  },
+  "environment": {
+    "python": "3.11.15",
+    "dependencies": {
+      "numpy": "2.3.0",
+      "scipy": "1.17.1",
+      "numba": "0.64.0",
+      "nibabel": "5.3.3",
+      "cupy": "14.2.0"
+    },
+    "gpu": "NVIDIA GeForce RTX 2080 Ti",
+    "cuda_runtime": 12060,
+    "cuda_driver": 12080,
+    "threads": 8
+  },
+  "comparisons": [
+    {
+      "repeat": 1,
+      "surf2sphere": {
+        "shape_equal": true,
+        "shape": [
+          163842,
+          3
+        ],
+        "dtype_equal": true,
+        "dtype": "float32",
+        "finite": true,
+        "array_equal": true,
+        "max_abs": 0.0,
+        "rms": 0.0,
+        "vertex_distance_mean": 0.0,
+        "vertex_distance_max": 0.0
+      },
+      "surfwarp_vertices": {
+        "shape_equal": true,
+        "shape": [
+          163842,
+          3
+        ],
+        "dtype_equal": true,
+        "dtype": "float32",
+        "finite": true,
+        "array_equal": true,
+        "max_abs": 0.0,
+        "rms": 0.0,
+        "vertex_distance_mean": 0.0,
+        "vertex_distance_max": 0.0
+      },
+      "surfwarp_velocity": {
+        "shape_equal": true,
+        "shape": [
+          2,
+          256,
+          512
+        ],
+        "dtype_equal": true,
+        "dtype": "float64",
+        "finite": true,
+        "array_equal": true,
+        "max_abs": 0.0,
+        "rms": 0.0
+      },
+      "surfwarp_deformation": {
+        "shape_equal": true,
+        "shape": [
+          2,
+          256,
+          512
+        ],
+        "dtype_equal": true,
+        "dtype": "float64",
+        "finite": true,
+        "array_equal": true,
+        "max_abs": 0.0,
+        "rms": 0.0
+      },
+      "surfwarp_objectives": {
+        "shape_equal": true,
+        "shape": [
+          108
+        ],
+        "dtype_equal": true,
+        "dtype": "float64",
+        "finite": true,
+        "array_equal": true,
+        "max_abs": 0.0,
+        "rms": 0.0
+      }
+    }
+  ],
+  "repeatability": [],
+  "gifti": {
+    "vertices": {
+      "shape_equal": true,
+      "shape": [
+        163842,
+        3
+      ],
+      "dtype_equal": true,
+      "dtype": "float32",
+      "finite": true,
+      "array_equal": true,
+      "max_abs": 0.0,
+      "rms": 0.0,
+      "vertex_distance_mean": 0.0,
+      "vertex_distance_max": 0.0
+    },
+    "faces_exact_to_input": true,
+    "metadata_matches_input": true,
+    "metadata_equals_old_writer": false,
+    "change": "The new writer retains pointset and triangle coordinate-system and metadata fields from the input template."
+  },
+  "inputs_unchanged": true,
+  "flashcharm_parent_imported": false,
+  "candidate_files_changed_since_validation_started": [],
+  "timing_scope": "Wall times include each function call and final CUDA synchronization. Imports and GIFTI input loading excluded. First call per namespace followed by an in-process repeat; both namespaces share the CUDA context and disk cache. No cold-process or speedup claim.",
+  "timings": [
+    {
+      "namespace": "flashcharm_reference",
+      "repeat": 1,
+      "surf2sphere_wall_seconds": 16.30250827781856,
+      "surfwarp_wall_seconds": 44.094403728842735
+    },
+    {
+      "namespace": "cat_surface_gpu",
+      "repeat": 1,
+      "surf2sphere_wall_seconds": 11.976206549443305,
+      "surfwarp_wall_seconds": 26.26173002459109
+    }
+  ],
+  "limits": "This checks the Python package migration on one pair of public anatomical templates. It is not a new comparison with the official CAT C implementation, a multi-subject study, or a speedup benchmark.",
+  "automated_tests": {
+    "passed": 57,
+    "cuda_tests": 8,
+    "skipped": 0
+  },
+  "installed_wheel_checks": {
+    "sphere": {
+      "parameters": {
+        "stop_at": 10,
+        "verbose": false
+      },
+      "status": "passed",
+      "input": "Full fsaverage templates: 163842 vertices and 327680 triangles; registration used the generated LH sphere",
+      "finite_output": true,
+      "triangles_equal_to_input": true
+    },
+    "warp": {
+      "parameters": {
+        "rotate": true,
+        "average": true,
+        "code": 1,
+        "loop": 6,
+        "regularization_type": 1,
+        "curvature_types": [
+          5,
+          5,
+          2
+        ],
+        "mu_change": 4,
+        "multires_levels": 0,
+        "map_size": [
+          512,
+          256
+        ],
+        "resampled_triangles": 81920,
+        "steps": 2,
+        "runs": 2,
+        "mu_rate": 1.25,
+        "lambda_value": 0.0,
+        "mu": 0.125,
+        "lm_regularization": 0.001,
+        "curvature_fwhm": 5.0,
+        "surface_fwhm": 0.0,
+        "cycles": 3,
+        "iterations": 3
+      },
+      "status": "passed",
+      "input": "Full fsaverage templates: 163842 vertices and 327680 triangles; registration used the generated LH sphere",
+      "finite_output": true,
+      "triangles_equal_to_input": true
+    }
+  }
+}

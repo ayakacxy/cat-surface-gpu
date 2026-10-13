@@ -11,9 +11,9 @@ Describe the change and its scientific or engineering motivation.
 - [ ] Performance claims include hardware, synchronization, repetitions, and timing boundaries.
 - [ ] No resolution, iteration, stopping condition, reduction order, or tie-breaking semantics changed.
 - [ ] No identifiable medical data, build cache, or generated binary was added unintentionally.
-- [ ] New source comments, docstrings, CLI text, and errors are in English.
+- [ ] New code comments and docstrings are in Chinese.
 
 ## License and provenance
 
 - [ ] New dependencies and copied code are documented in `THIRD_PARTY_NOTICES.md`.
-- [ ] Native binary changes include corresponding source and build instructions.
+- [ ] The package runs without CAT executables or project-specific native extensions.

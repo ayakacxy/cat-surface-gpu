@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate deterministic, non-anatomical GIFTI meshes for smoke testing."""
+"""生成可复现、不含解剖数据的 GIFTI 网格，用于基本运行检查。"""
 
 # SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -14,7 +14,7 @@ from nibabel.gifti import GiftiDataArray, GiftiImage
 
 
 def _icosahedron() -> tuple[np.ndarray, np.ndarray]:
-    """Return a unit icosahedron with consistently oriented triangular faces."""
+    """返回三角形方向一致的单位二十面体。"""
 
     phi = (1.0 + np.sqrt(5.0)) / 2.0
     vertices = np.asarray(
@@ -66,7 +66,7 @@ def _icosahedron() -> tuple[np.ndarray, np.ndarray]:
 def _subdivide(
     vertices: np.ndarray, faces: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Subdivide every triangle once and project new vertices to the unit sphere."""
+    """细分每个三角形，并将新增顶点投影到单位球面。"""
 
     points = [point.copy() for point in vertices]
     midpoint_cache: dict[tuple[int, int], int] = {}
@@ -99,7 +99,7 @@ def _subdivide(
 
 
 def create_icosphere(subdivisions: int) -> tuple[np.ndarray, np.ndarray]:
-    """Create a deterministic unit icosphere."""
+    """生成可复现的单位二十面体球。"""
 
     if subdivisions < 0 or subdivisions > 6:
         raise ValueError("subdivisions must be between 0 and 6")
@@ -110,7 +110,7 @@ def create_icosphere(subdivisions: int) -> tuple[np.ndarray, np.ndarray]:
 
 
 def _write_gifti(path: Path, vertices: np.ndarray, faces: np.ndarray) -> None:
-    """Write one two-array GIFTI surface."""
+    """写出包含顶点和三角形的 GIFTI 表面。"""
 
     point_array = GiftiDataArray(
         np.ascontiguousarray(vertices, dtype=np.float32),
@@ -126,7 +126,7 @@ def _write_gifti(path: Path, vertices: np.ndarray, faces: np.ndarray) -> None:
 
 
 def generate_fixture(output: Path, subdivisions: int = 3) -> dict[str, Path]:
-    """Write source and target white/sphere meshes without anatomical data."""
+    """写出不含解剖数据的源和目标白质表面及球面。"""
 
     output.mkdir(parents=True, exist_ok=True)
     sphere, faces = create_icosphere(subdivisions)
@@ -148,7 +148,7 @@ def generate_fixture(output: Path, subdivisions: int = 3) -> dict[str, Path]:
 
 
 def main() -> int:
-    """Generate a fixture from command-line arguments."""
+    """根据命令行参数生成测试网格。"""
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)

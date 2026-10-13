@@ -2,12 +2,6 @@ name: CUDA validation
 
 on:
   workflow_dispatch:
-    inputs:
-      run_end_to_end:
-        description: Run the private-fixture end-to-end command configured on the runner
-        required: true
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -16,27 +10,33 @@ jobs:
   cuda:
     runs-on: [self-hosted, linux, x64, gpu]
     timeout-minutes: 90
+    env:
+      TMPDIR: ${{ github.workspace }}/.work/gpu-ci/tmp
+      TMP: ${{ github.workspace }}/.work/gpu-ci/tmp
+      TEMP: ${{ github.workspace }}/.work/gpu-ci/tmp
+      XDG_CACHE_HOME: ${{ github.workspace }}/.work/gpu-ci/cache
+      PIP_CACHE_DIR: ${{ github.workspace }}/.work/gpu-ci/cache/pip
+      NUMBA_CACHE_DIR: ${{ github.workspace }}/.work/gpu-ci/cache/numba
+      CUPY_CACHE_DIR: ${{ github.workspace }}/.work/gpu-ci/cache/cupy
+      CUDA_CACHE_PATH: ${{ github.workspace }}/.work/gpu-ci/cache/cuda
+      PYTHONPYCACHEPREFIX: ${{ github.workspace }}/.work/gpu-ci/cache/pycache
+      OMP_NUM_THREADS: "8"
+      OPENBLAS_NUM_THREADS: "8"
+      NUMBA_NUM_THREADS: "8"
     steps:
       - uses: actions/checkout@v7
       - name: Create isolated validation environment
         run: |
-          python3.11 -m venv .venv-ci
-          .venv-ci/bin/python -m pip install --upgrade pip
-          .venv-ci/bin/python -m pip install torch==2.6.0 --index-url https://download.pytorch.org/whl/cu126
-          .venv-ci/bin/python -m pip install '.[cuda,test]'
+          mkdir -p "$TMPDIR" "$XDG_CACHE_HOME"
+          python3.11 -m venv .work/gpu-ci/venv
+          .work/gpu-ci/venv/bin/python -m pip install --upgrade pip
+          .work/gpu-ci/venv/bin/python -m pip install '.[cuda,test]'
       - name: Require a real CUDA device
         run: |
-          .venv-ci/bin/python - <<'PY'
-          import torch
-          assert torch.cuda.is_available(), "CUDA is not available on this runner"
-          print(torch.__version__, torch.version.cuda, torch.cuda.get_device_name(0))
+          .work/gpu-ci/venv/bin/python - <<'PY'
+          import cupy as cp
+          assert cp.cuda.runtime.getDeviceCount() > 0
+          print(cp.__version__, cp.cuda.runtime.runtimeGetVersion(), cp.cuda.runtime.getDeviceProperties(0)['name'])
           PY
-      - name: Run CPU and CUDA contracts
-        run: .venv-ci/bin/python -m pytest -q
-      - name: Run configured private-fixture A/B
-        if: inputs.run_end_to_end
-        env:
-          CAT_SURFACE_GPU_E2E_COMMAND: ${{ secrets.CAT_SURFACE_GPU_E2E_COMMAND }}
-        run: |
-          test -n "${CAT_SURFACE_GPU_E2E_COMMAND}"
-          bash -lc "${CAT_SURFACE_GPU_E2E_COMMAND}"
+      - name: Run CPU and CUDA tests
+        run: .work/gpu-ci/venv/bin/python -m pytest -q --basetemp .work/gpu-ci/pytest -o cache_dir=.work/gpu-ci/cache/pytest

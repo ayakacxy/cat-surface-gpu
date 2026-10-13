@@ -7,7 +7,7 @@ body:
     id: hardware
     attributes:
       label: Hardware and software
-      description: GPU, CPU, RAM, driver, CUDA, Python, PyTorch, Triton, commit, and compiler.
+      description: GPU, CPU, RAM, driver, CUDA, Python, CuPy, NumPy, Numba, commit, and compiler.
     validations:
       required: true
   - type: textarea

@@ -1,220 +1,122 @@
-<div align="center">
-
 # CAT-Surface GPU
 
-GPU-accelerated `CAT_Surf2Sphere` and `CAT_SurfWarp`-compatible surface registration.
+Python implementation of CAT-Surface spherical inflation and cortical surface registration, with CuPy CUDA kernels.
 
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/ayakacxy/cat-surface-gpu?display_name=tag&sort=semver)](https://github.com/ayakacxy/cat-surface-gpu/releases/latest)
 [![CI](https://github.com/ayakacxy/cat-surface-gpu/actions/workflows/ci.yml/badge.svg)](https://github.com/ayakacxy/cat-surface-gpu/actions/workflows/ci.yml)
-[![CodeQL](https://github.com/ayakacxy/cat-surface-gpu/actions/workflows/codeql.yml/badge.svg)](https://github.com/ayakacxy/cat-surface-gpu/actions/workflows/codeql.yml)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB.svg?logo=python&logoColor=white)](pyproject.toml)
-[![CUDA 12.6 tested](https://img.shields.io/badge/CUDA-12.6-76B900.svg?logo=nvidia&logoColor=white)](docs/BENCHMARKS.md)
-[![Linux x86-64](https://img.shields.io/badge/platform-Linux%20x86--64-lightgrey.svg)](bin/linux-x86_64)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB.svg)](pyproject.toml)
 
-[简体中文](README.zh-CN.md) · [Documentation](docs/README.md) · [Benchmarks](docs/BENCHMARKS.md) · [Build from source](docs/BUILDING.md) · [Upstream credits](THIRD_PARTY_NOTICES.md)
+[简体中文](README.zh-CN.md) · [Documentation](docs/README.md) · [Release notes](docs/RELEASE_v0.2.0.md) · [Upstream credits](THIRD_PARTY_NOTICES.md)
 
-⚡ **GPU-accelerated** · 🧠 **Surface registration** · 🧪 **Reference-checked** · 📦 **Ready-to-run binaries**
+Version **0.2.0** brings the CAT implementation from FlashCHARM into this standalone package:
 
-</div>
+- `CAT_Surf2Sphere`: cortical surface inflation and projection onto a sphere.
+- `CAT_SurfWarp`: depth features, initial rotation, spherical resampling, DARTEL registration, averaging, and registered-sphere output.
 
-CAT-Surface GPU provides two optimized components for the cortical-surface registration path used by CAT-Surface and SimNIBS:
+The implementation uses NumPy and Numba for CPU work and CuPy for CUDA kernels. It does not call CAT executables or load project-specific C/Cython extensions. The wheel contains Python source; Numba and CuPy still compile kernels at runtime, and the full workflow requires an NVIDIA GPU. PyTorch and Triton are no longer dependencies.
 
-- `CAT_Surf2Sphere`: topology-aware Triton kernels accelerate the area-preserving spherical inflation loop while preserving the upstream iteration count and dependency order.
-- `CAT_SurfWarp`: a PyTorch/Triton pipeline accelerates initial rotation, surface resampling, DARTEL optimization, averaging, and final warp application. It is compatible with the `CAT_WarpSurf` role in the SimNIBS surface-registration workflow.
+## Versions
 
-The CPU reference path remains explicit. Requesting CUDA without a usable GPU or requesting Triton without a working kernel raises an error; the implementation does not silently fall back to CPU.
+| Version | Implementation | CAT-Surface source |
+| --- | --- | --- |
+| [0.2.0](docs/RELEASE_v0.2.0.md) | Python, NumPy/Numba, and CuPy; no bundled CAT programs | [`b0c2aa23`](https://github.com/ChristianGaser/CAT-Surface/tree/b0c2aa2395ea4957a331b9444fb54c7716b6572d) |
+| [0.1.0](docs/RELEASE_v0.1.0.md) | PyTorch/Triton acceleration with bundled CPU reference and helper programs | [`628b6851`](https://github.com/ChristianGaser/CAT-Surface/tree/628b6851d8638f3ab773cd25c0ec406d0ec61ede) |
 
-## ⚡ Performance at a glance
+The v0.1.0 measurements remain available in [historical benchmarks](docs/BENCHMARKS.md). They describe that release and do not measure v0.2.0. The upstream revision and default linear solver changed in v0.2.0, so outputs should be compared with the corresponding reference. See [migration notes](docs/MIGRATION.md).
 
-Measured on an NVIDIA GeForce RTX 2080 Ti with Python 3.11, PyTorch `2.6.0+cu126`, and Triton `3.2.0`. Every comparison uses the same input, parameters, output topology, and an explicit vertex-error contract.
+## Install
 
-| Component | Workload | CPU reference | GPU | Speedup | Max vertex error |
-| --- | --- | ---: | ---: | ---: | ---: |
-| `CAT_Surf2Sphere` | LH, 61,442 vertices, `stop_at=10` | 54.84 s | 10.8119 s | 5.07x | 1.14e-5 |
-| `CAT_SurfWarp` | LH, `steps=2`, `runs=2`, `avg` | 119.9142 s | 45.0848 s | 2.66x | 2.85e-5 |
-| `CAT_SurfWarp` | RH, `steps=2`, `runs=2`, `avg` | 119.4056 s | 46.9862 s | 2.54x | 3.41e-4 |
+Use Python 3.11 or newer and an NVIDIA driver compatible with your CuPy installation. Linux is the tested platform. The `cuda` extra installs `cupy-cuda12x` for CUDA 12.x; other CUDA configurations require a matching CuPy package.
 
-With the SimNIBS default two-hemisphere schedule, the measured GPU wall time was:
-
-| Stage | Bilateral wall time |
-| --- | ---: |
-| `CAT_Surf2Sphere` | 15.7609 s |
-| Topology upsampling | 4.5208 s |
-| `CAT_SurfWarp` | 34.9756 s |
-| **Total CAT registration chain** | **55.2573 s** |
-
-Final triangle arrays were exact. Final LH/RH `sphere.reg` maximum vertex errors were `1.38e-6` and `1.81e-4`, both below the `1e-3` acceptance threshold. See [BENCHMARKS.md](docs/BENCHMARKS.md) for hardware, shapes, parameters, timing boundaries, stage profiles, and numerical results.
-
-## 🧩 Requirements
-
-- Linux x86-64
-- NVIDIA GPU with a CUDA-compatible driver
-- Conda or Miniconda
-- Python 3.11
-- PyTorch 2.6 and Triton 3.2 for the validated environment
-
-The repository includes stripped Linux x86-64 CPU reference/helper binaries requiring glibc 2.29 or newer. Other platforms can use the Python implementation but must rebuild the CAT-Surface reference and helper programs from source.
-
-## 🐍 Conda installation
-
-Clone the repository and create the base environment:
+From a checkout:
 
 ```bash
 git clone https://github.com/ayakacxy/cat-surface-gpu.git
 cd cat-surface-gpu
+git checkout v0.2.0
 
-conda env create -f environment.yml
-conda activate cat-surface-gpu
+mkdir -p .work/setup/{tmp,cache/pip,cache/numba,cache/cupy}
+export TMPDIR="$PWD/.work/setup/tmp" TMP="$PWD/.work/setup/tmp" TEMP="$PWD/.work/setup/tmp"
+export XDG_CACHE_HOME="$PWD/.work/setup/cache"
+export PIP_CACHE_DIR="$PWD/.work/setup/cache/pip"
+export NUMBA_CACHE_DIR="$PWD/.work/setup/cache/numba"
+export CUPY_CACHE_DIR="$PWD/.work/setup/cache/cupy"
+
+python -m pip install '.[cuda]'
+python -c 'import cupy; print(cupy.cuda.runtime.getDeviceCount())'
 ```
 
-Install the CUDA 12.6 build used for the reported benchmarks, then install this project:
+The repository also provides an [environment file](environment.yml) for Conda users. For a wheel or source archive, see [building and packaging](docs/BUILDING.md).
+
+## Run
+
+Inputs and outputs are GIFTI surfaces. Each anatomical surface must share vertex ordering and triangles with its corresponding sphere. The source and template may have different meshes. Template and subject files are supplied by the user.
+
+Before running, set writable work and kernel-cache directories inside the project:
 
 ```bash
-python -m pip install torch==2.6.0 \
-  --index-url https://download.pytorch.org/whl/cu126
-python -m pip install '.[cuda,test]'
+mkdir -p .work/example/{tmp,cache/numba,cache/cupy,output}
+export TMPDIR="$PWD/.work/example/tmp" TMP="$PWD/.work/example/tmp" TEMP="$PWD/.work/example/tmp"
+export XDG_CACHE_HOME="$PWD/.work/example/cache"
+export NUMBA_CACHE_DIR="$PWD/.work/example/cache/numba"
+export CUPY_CACHE_DIR="$PWD/.work/example/cache/cupy"
 ```
 
-Verify the environment:
-
-```bash
-python - <<'PY'
-import torch
-import triton
-
-print("PyTorch:", torch.__version__)
-print("Triton:", triton.__version__)
-print("CUDA runtime:", torch.version.cuda)
-print("CUDA available:", torch.cuda.is_available())
-if torch.cuda.is_available():
-    print("GPU:", torch.cuda.get_device_name(0))
-PY
-
-python -m pytest -q
-```
-
-CPU-only test collection is supported, but CUDA tests are skipped when no GPU is visible. GPU performance and numerical claims require a real CUDA run.
-
-## 🌐 Quick start: `CAT_Surf2Sphere`
-
-The optimized path uses the bundled upstream CPU reference for the first five stages and runs the 4,999 area-smoothing sweeps on CUDA. No iteration is removed.
+Create a sphere:
 
 ```bash
 cat-surf2sphere-gpu \
-  --input-surface /path/to/coarse.white.gii \
-  --output-surface /path/to/sphere.gii \
-  --stop-at 10 \
-  --device cuda \
-  --dtype float32 \
-  --kernel triton \
-  --preprocess-kernel cpu \
-  --areal-schedule ordered \
-  --areal-arithmetic cat
+  --input-surface /path/to/white.gii \
+  --output-surface .work/example/output/sphere.gii \
+  --stop-at 10 --device cuda --threads 8
 ```
 
-Run a CPU/GPU A/B with topology and error checks:
-
-```bash
-python tools/benchmark_cat_surf2sphere_gpu.py \
-  --reference-cli bin/linux-x86_64/CAT_Surf2Sphere \
-  --input-surface /path/to/coarse.white.gii \
-  --reference-output /tmp/sphere.cpu.gii \
-  --gpu-output /tmp/sphere.gpu.gii \
-  --device cuda \
-  --kernel triton \
-  --areal-schedule ordered \
-  --areal-arithmetic cat \
-  --max-vertex-error 1e-3 \
-  --max-mean-error 1e-3 \
-  --max-p99-error 1e-3
-```
-
-## 🧭 Quick start: `CAT_SurfWarp`
-
-The full registration runner includes input/output, initial rotation, DARTEL, `-avg`, and GIFTI writing in its reported wall time.
+Register it to a template:
 
 ```bash
 cat-surfwarp-gpu \
   --source-surface /path/to/white.gii \
-  --source-sphere /path/to/sphere.gii \
+  --source-sphere .work/example/output/sphere.gii \
   --target-surface /path/to/template.white.gii \
   --target-sphere /path/to/template.sphere.gii \
-  --output /path/to/sphere.reg.gii \
-  --rotation-feature-backend cuda-official-depth \
-  --stencil-threads 8 \
-  --device cuda \
-  --kernel triton \
-  --dartel-dtype float64 \
-  --squaring-kernel triton \
-  --steps 2 \
-  --runs 2 \
-  --avg \
-  --cuda-graph
+  --output .work/example/output/sphere.reg.gii \
+  --steps 2 --runs 2 --average \
+  --solver-backend pcg --solver-iterations 40 \
+  --device cuda --threads 8
 ```
 
-Use `tools/benchmark_cat_surface_end_to_end.py` to compare this path against the bundled `bin/linux-x86_64/CAT_SurfWarp` CPU reference on the same inputs.
+The commands report stage progress and return an error if CUDA is unavailable. First runs include kernel compilation. Use `--help` for options and [implementation details](docs/IMPLEMENTATION.md) for supported parameters and numerical differences from CAT-Surface.
 
-## 📦 Bundled Linux binaries
-
-| File | Purpose |
-| --- | --- |
-| `CAT_Surf2Sphere` | Upstream CPU reference used by the hybrid spherical-inflation runner |
-| `CAT_SurfWarp` | Upstream CPU reference for end-to-end A/B |
-| `cat_surface_rotation_depth` | Exports upstream-compatible raw depth features for initial rotation |
-| `cat_surface_stencil_builder` | Builds deterministic surface-resampling stencils; uses 8 CPU workers by default and accepts `--threads N` |
-
-All four files are stripped x86-64 ELF executables built from [CAT-Surface commit `628b6851`](https://github.com/ChristianGaser/CAT-Surface/tree/628b6851d8638f3ab773cd25c0ec406d0ec61ede) with `-O2 -fPIC`. They link only to glibc, libm, and pthread at runtime. Checksums are in [`bin/linux-x86_64/SHA256SUMS`](bin/linux-x86_64/SHA256SUMS). Source files for the two helpers are available in [`native/`](native/), and the complete build procedure is in [BUILDING.md](docs/BUILDING.md).
-
-The Python runners expose the same setting as `--stencil-threads`. The default of 8 avoids excessive CPU oversubscription when source/target work and both hemispheres run concurrently; high-core-count systems can select 16 or 32 explicitly.
-
-## 🎯 Numerical contract
-
-- Mesh topology must match the CPU reference exactly.
-- `CAT_Surf2Sphere` ordered scheduling preserves upstream vertex dependencies and executes 4,999 sweeps for `stop_at=10`.
-- The recommended warp path uses FP64 DARTEL and retains the upstream `steps`, `runs`, `loop`, `cycles`, `nit`, `its`, `code`, and `avg` semantics.
-- The default public acceptance threshold is `max/mean/p99 <= 1e-3` for final vertex coordinates.
-- Experimental all-GPU feature paths remain opt-in and are not used by the recommended commands above.
-
-The installed public Python namespace is `cat_surface_gpu`:
+## Python API
 
 ```python
-from cat_surface_gpu import run_cat_surf2sphere_gpu, run_cat_surface_gpu_pipeline
+from cat_surface_gpu import (
+    GiftiSurface,
+    Surf2SphereParameters,
+    load_gifti_surface,
+    save_gifti_surface,
+    surf_to_sphere_cupy,
+)
+
+surface = load_gifti_surface("white.gii")
+sphere_vertices, timings = surf_to_sphere_cupy(
+    surface.vertices, surface.faces, Surf2SphereParameters(stop_at=10)
+)
+save_gifti_surface(
+    GiftiSurface(sphere_vertices, surface.faces, surface.reference),
+    "sphere.gii",
+)
 ```
 
-## 🗂️ Repository layout
+`SurfWarpParameters` and `surfwarp_cupy` provide the registration API. See [implementation details](docs/IMPLEMENTATION.md) for the full call and supported inputs.
 
-```text
-src/cat_surface_gpu/          Public API, GPU kernels, and registration implementation
-tools/                        CLI runners, benchmarks, and A/B utilities
-native/                       Source for the two bundled helper programs
-scripts/                      Build and release-verification automation
-tests/                        CPU contracts and CUDA tests
-bin/linux-x86_64/             Bundled reference/helper executables
-docs/                         Benchmarks, build, reproducibility, and community guides
-```
+## Validation and development
 
-## 🧪 Synthetic smoke fixture
+The package includes synthetic fixtures and CPU/CUDA tests. A skipped CUDA test does not establish GPU correctness. Numerical comparisons should use the same inputs, parameters, and upstream revision, check triangle arrays exactly, and report coordinate differences. [Reproducibility](docs/REPRODUCIBILITY.md) describes the procedure; [contributing](docs/CONTRIBUTING.md) covers development.
 
-The repository does not distribute anatomical or subject data. Generate deterministic, non-anatomical GIFTI files for installation and I/O smoke tests:
+## Credits and license
 
-```bash
-python tools/generate_synthetic_fixture.py --output /tmp/cat-surface-gpu-smoke
-python scripts/verify_release.py
-```
+This implementation was adapted from FlashCHARM's CAT module. It builds on [CAT-Surface](https://github.com/ChristianGaser/CAT-Surface), developed by Christian Gaser, and the surface-registration workflow used by [SimNIBS](https://github.com/simnibs/simnibs). DARTEL originates from John Ashburner's work.
 
-This fixture verifies packaging and structural contracts; it is not a substitute for the real-input numerical and performance A/B in [BENCHMARKS.md](docs/BENCHMARKS.md).
-
-## 🛠️ Development and release integrity
-
-- [BUILDING.md](docs/BUILDING.md) documents the pinned upstream source and native rebuild.
-- [REPRODUCIBILITY.md](docs/REPRODUCIBILITY.md) defines provenance and validation layers.
-- [CONTRIBUTING.md](docs/CONTRIBUTING.md) defines the scientific contract for changes.
-- [SECURITY.md](docs/SECURITY.md) explains private vulnerability reporting and medical-data safety.
-- [CHANGELOG.md](docs/CHANGELOG.md) records release-visible changes.
-
-## 🙏 Credits and license
-
-This project builds on the original [CAT-Surface](https://github.com/ChristianGaser/CAT-Surface) implementation by Christian Gaser and on the CAT surface-registration workflow used by [SimNIBS](https://github.com/simnibs/simnibs). Their work, including the upstream DARTEL implementation and surface I/O stack, made this acceleration possible. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for exact source and license information.
-
-The new code in this repository is licensed under [GPL-3.0-or-later](LICENSE). Bundled upstream-derived binaries and upstream components retain their applicable licenses.
+Project code is distributed under [GPL-3.0-or-later](LICENSE). Upstream components retain their applicable notices. See [third-party notices](THIRD_PARTY_NOTICES.md) for source revisions and attribution.

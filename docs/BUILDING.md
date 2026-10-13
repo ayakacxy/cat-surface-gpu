@@ -1,39 +1,63 @@
-# Building the Native Binaries from Source
+# Building and packaging v0.2.0
 
-The four Linux executables distributed with CAT-Surface GPU are built from the exact CAT-Surface revision recorded in [`UPSTREAM.lock`](../UPSTREAM.lock). The two project-specific helper sources live in [`native/`](../native/). No `-ffast-math`, native-CPU tuning, reduced iteration count, or approximate algorithm is used.
+Version 0.2.0 ships Python source. Building the package does not compile or bundle CAT-Surface executables, project-specific native extensions, or CUDA binaries. Numba and CuPy compile kernels when the relevant functions run.
 
-## Build dependencies
+## Build a wheel and source archive
 
-On Ubuntu 22.04 or newer:
-
-```bash
-sudo apt-get update
-sudo apt-get install -y \
-  autoconf automake build-essential git libtool pkg-config
-```
-
-The upstream CAT-Surface repository vendors its remaining C dependencies.
-
-## Rebuild
+Run from the repository root with Python 3.11 or newer:
 
 ```bash
-BUILD_JOBS=8 ./scripts/build_native.sh
+mkdir -p .work/package/{tmp,cache/pip,cache/numba,cache/cupy,dist}
+export TMPDIR="$PWD/.work/package/tmp" TMP="$PWD/.work/package/tmp" TEMP="$PWD/.work/package/tmp"
+export XDG_CACHE_HOME="$PWD/.work/package/cache"
+export PIP_CACHE_DIR="$PWD/.work/package/cache/pip"
+export NUMBA_CACHE_DIR="$PWD/.work/package/cache/numba"
+export CUPY_CACHE_DIR="$PWD/.work/package/cache/cupy"
+
+python -m pip install build
+python -m build --outdir .work/package/dist
 ```
 
-`BUILD_JOBS` controls compilation only. Runtime stencil parallelism is controlled independently by `--stencil-threads` and defaults to 8.
+The wheel uses the `py3-none-any` tag because this project ships no compiled extension. This tag does not imply that its CUDA workflow runs on every platform. An appropriate CuPy build and NVIDIA driver are still required.
 
-The script checks out the pinned source revision, builds the upstream static library with `-O2 -fPIC`, compiles all four executables, strips nonessential symbols, and writes a SHA-256 manifest. Outputs are placed in `build/native-output/` unless `OUTPUT_DIR` is set.
-
-To compare a fresh build with the distributed binaries:
+Install the wheel and CUDA 12.x dependency:
 
 ```bash
-sha256sum -c bin/linux-x86_64/SHA256SUMS
-file build/native-output/*
-ldd build/native-output/CAT_SurfWarp
+python -m pip install .work/package/dist/cat_surface_gpu-0.2.0-py3-none-any.whl
+python -m pip install 'cupy-cuda12x>=13'
 ```
 
-Byte-identical binaries require the same compiler, binutils, glibc, Autotools, and source path normalization. A non-identical hash is not by itself a numerical failure; run the A/B validation described in [BENCHMARKS.md](BENCHMARKS.md).
+The source distribution includes the Python implementation, inline CUDA kernel source, tests, documentation, and attribution. It contains no anatomical inputs or templates.
 
-## Corresponding source
+## Verify the package
 
-The release source archive contains all code written for this project. The exact upstream CAT-Surface source is available at the pinned commit and is attached to the GitHub release as a separate source archive. See [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) for license details.
+```bash
+python scripts/verify_release.py
+python -m pytest -q --basetemp .work/package/tmp/pytest
+```
+
+CUDA tests need a usable GPU. CPU tests and archive inspection can run without one; report CUDA skips separately. Consult [reproducibility](REPRODUCIBILITY.md) before using a packaging check to support numerical or performance claims.
+
+## Assemble release files
+
+Keep the CAT-Surface source archive identified by `UPSTREAM.lock` under `.work/package/source/`. After building the wheel and source distribution above, run:
+
+```bash
+python scripts/build_release_artifacts.py \
+  --upstream-archive .work/package/source/CAT-Surface-b0c2aa2395ea4957a331b9444fb54c7716b6572d.tar.gz \
+  --dist .work/package/dist
+```
+
+The script checks the upstream archive's SHA-256 against `UPSTREAM.lock` before assembling five release files:
+
+- Python wheel;
+- project source archive;
+- pinned CAT-Surface source archive;
+- CycloneDX dependency inventory;
+- `SHA256SUMS` for the four artifacts above.
+
+The upstream archive is provided separately for source reference. It is not installed by the wheel. There is no Linux executable bundle in v0.2.0. The [FlashCHARM source record](../upstream/FLASHCHARM_CAT_PROVENANCE.json) records the origin and hashes of the adapted Python modules.
+
+## Rebuilding v0.1.0
+
+The earlier release includes four Linux executables and a different build procedure. Use the source and [build guide at the v0.1.0 tag](https://github.com/ayakacxy/cat-surface-gpu/blob/v0.1.0/docs/BUILDING.md) in a separate checkout if you need to reproduce those binaries. The v0.2.0 package does not use them.

@@ -35,3 +35,6 @@ benchmarks/
 .DS_Store
 .idea/
 .vscode/
+
+# 项目内的临时验证与构建文件
+.work/

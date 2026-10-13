@@ -1,0 +1,47 @@
+{
+  "implementation_origin": "FlashCHARM CAT Python implementation",
+  "snapshot_date": "2026-10-13",
+  "source_git_commit": null,
+  "source_note": "The local FlashCHARM implementation has no Git commit. SHA-256 digests identify the imported source snapshot.",
+  "algorithm_upstream_commit": "b0c2aa2395ea4957a331b9444fb54c7716b6572d",
+  "source_sha256": {
+    "__init__.py": "b93b2a2fd4498339874ebcd94c111e924d106a2aa38dd683f45d5b7ebb188cf2",
+    "contracts.py": "150920446bf61adebf44d371c76130ce28e00d1680af0254515be8a0b5de44ff",
+    "dartel.py": "df71de002f8f6f5c07cbf7bf9d8d013aaee5474d2f7f7684a643747a929ca8b2",
+    "features.py": "96f21e80395e330215266d310a0d13b992a09674aaca63efb4ee19dabb2c0300",
+    "geometry.py": "2262eda7e70d2b1ee0f7e941dfc9c906ba173f3331271f1661d9e8bf32433826",
+    "io.py": "3127ada3e937e5797e33c9a641dd3967f4ede7b3484fe9790afad9c35834f6de",
+    "mapping.py": "1c4b2519f08bd3e9d3d83b848831320b697ebb5a2f496c5f69a27966d66581d0",
+    "resampling.py": "0949a84141794239b0ba8188ee26a9b01ed3573dbbe6177fb753de1d53c92aa0",
+    "rotation.py": "c44527b2468565f258063c39fa2e38cb88d98439044bd9e21feebee1c6a11dc8",
+    "surf2sphere.py": "b719941f74525db86fbaf3fd260fb7dbc9bd4e73ad4068f663aa0fe4eefe6925",
+    "surfwarp.py": "5b3ec962c5dba6739e2f868745d50d2127734e974d4a6784e18246e13f919afd",
+    "topology.py": "67ba0b7af9b9ed296437885afd66f239ae900f42c2eb3bfff1c383a96b873ab8"
+  },
+  "adaptations": [
+    "Independent cat_surface_gpu namespace and file-based command-line interfaces",
+    "contracts.py renamed to parameters.py",
+    "Project-specific PCG environment variable name",
+    "Validation of unsupported parameter combinations; release tests and packaging",
+    "Optional progress callbacks without changes to calculation order",
+    "Preserve GIFTI coordinate-system and array metadata on output",
+    "Handle exactly zero PCG residuals without division by zero; nonzero calculations and iteration limits remain unchanged",
+    "Reject exactly zero-area or non-finite triangles at input and output boundaries",
+    "Report the actual area-smoothing sweep count in progress messages"
+  ],
+  "packaged_source_sha256": {
+    "__init__.py": "ceba6a81a7bd9a742395ce87dda3690ffb5b3500463fa46100dea0b0b2e26db6",
+    "cli.py": "f0bb6db00891e476b410b2c85ad1b7b9d0ca6dc4691f3a01a9de71fbd444639a",
+    "dartel.py": "3b508fcaee1e6bf8c449324030bd5bf4ea56e614e8557717e172ddfdfe6f88f3",
+    "features.py": "df86fc11a8d96e9e60e9873c0c3a231bb8a7da86e745613582a510c1185f8048",
+    "geometry.py": "c3a231e38e64c299b6302e8ab268b045a1d2991374390d46ec771cf3c708c296",
+    "io.py": "a0c4bbafe66139619caad6786172e1a78865352cd0a4ac6d6410db349d65cec3",
+    "mapping.py": "1c4b2519f08bd3e9d3d83b848831320b697ebb5a2f496c5f69a27966d66581d0",
+    "parameters.py": "2b11f8cb02a116f4903b624d57722123c709b8913ae45c9542f8b06a811f8da0",
+    "resampling.py": "35bfbbeabd781ccd96e4ed3bb90c6c4b1c8fc44ef00bea9d622d33f8fa7d71ff",
+    "rotation.py": "df20eb5260886419f51c792a70c357a54bc8f4a800cb40b6908938398484e727",
+    "surf2sphere.py": "d54f86087c2c3008e04db0cd89fc17e9895aeec467ac404819de11a59244661a",
+    "surfwarp.py": "89756dc239b748b619e071042f52d65ac709641709719407ac5826c5510d9c36",
+    "topology.py": "c0da500496360a0c79bbcabd7ae8192896e1e9deba9097756079e1dd4201e96c"
+  }
+}

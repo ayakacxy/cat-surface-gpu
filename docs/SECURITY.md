@@ -12,4 +12,4 @@ Include the affected version, environment, reproduction steps, impact, and any p
 
 ## Scope
 
-The bundled native executables parse untrusted surface files and invoke native CAT-Surface code. Run untrusted files in an isolated environment. The project does not collect telemetry or upload input data.
+The package reads GIFTI surfaces and uses NumPy, Numba, nibabel, and CuPy to process them. Version 0.2.0 does not bundle CAT executables. The project does not collect telemetry or upload input data.

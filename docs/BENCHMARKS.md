@@ -1,6 +1,6 @@
-# Performance and Accuracy Benchmarks
+# Historical v0.1.0 performance and accuracy
 
-This document records the measurement boundary behind the performance numbers in the README. Results are specific to the listed hardware, software, input shapes, and parameters.
+These measurements describe **v0.1.0**, the PyTorch/Triton implementation with bundled CAT CPU programs. They are retained for reproducibility and do not measure the Python/Numba/CuPy implementation in v0.2.0. Results are specific to the hardware, software, inputs, and parameters below.
 
 ## Validated environment
 
@@ -31,27 +31,27 @@ The test fixture is one anonymized cortical surface pair with the SimNIBS fsaver
 
 ### SimNIBS default coarse sphere
 
-Input per hemisphere: 61,442 vertices and 122,880 triangles. The recommended backend keeps the first five upstream stages on the bundled CPU reference and runs area smoothing with the ordered Triton schedule.
+Input per hemisphere: 61,442 vertices and 122,880 triangles. The v0.1.0 backend keeps the first five upstream stages on the bundled CPU reference and runs area smoothing with the ordered Triton schedule.
 
-| Hemisphere | Latest CPU reference | GPU total | Area smoothing only | Max / mean / p99 absolute error | Faces |
+| Hemisphere | Pinned CPU reference | GPU total | Area smoothing only | Max / mean / p99 absolute error | Faces |
 | --- | ---: | ---: | ---: | ---: | --- |
 | LH | 54.84 s | 10.8119 s | 3.7084 s | 1.1444e-5 / 1.7699e-6 / 7.6294e-6 | exact |
 | RH | not recorded in the same standalone run | 10.6667 s | 3.5142 s | 1.5259e-5 / 1.6752e-6 / 7.6294e-6 | exact |
 
-The LH speedup against the latest CPU reference is 5.07x. The RH table intentionally does not infer a speedup from a different CPU run.
+The LH speedup against the pinned CPU reference is 5.07x. The RH table intentionally does not infer a speedup from a different CPU run.
 
 When LH and RH run concurrently on one GPU, each process reports about 13.81 seconds because the kernels share the device; the observed bilateral stage wall time is 15.7609 seconds.
 
 ### Full-resolution profile
 
-Input per hemisphere: 245,762 vertices and 491,520 triangles. This earlier profile used the explicit FP32/Triton path and the wider `5e-3 / 1e-3 / 3e-3` intermediate-sphere contract.
+Input per hemisphere: 245,762 vertices and 491,520 triangles. This earlier profile used the explicit FP32/Triton path and the wider `5e-3 / 1e-3 / 3e-3` intermediate-sphere error limits.
 
-| Hemisphere | Latest CPU reference | GPU | Speedup | Max / mean / p99 absolute error | Faces |
+| Hemisphere | Pinned CPU reference | GPU | Speedup | Max / mean / p99 absolute error | Faces |
 | --- | ---: | ---: | ---: | ---: | --- |
 | LH | 234.00 s | 37.8887 s | 6.18x | 3.073e-3 / 6.20e-4 / 2.407e-3 | exact |
 | RH | 236.35 s | 37.4264 s | 6.32x | 3.170e-3 / 6.12e-4 / 2.398e-3 | exact |
 
-The coarse ordered schedule above is the recommended SimNIBS-default profile because it provides the tighter `1e-3` contract.
+The coarse ordered schedule above is the v0.1.0 SimNIBS-default profile because it provides the tighter `1e-3` error limit.
 
 ## `CAT_SurfWarp`
 
@@ -62,7 +62,7 @@ Input per hemisphere:
 - DARTEL map: `512 x 256`;
 - parameters: `steps=2`, `runs=2`, `avg=true`, `loop=6`, `cycles=3`, `nit=3`, `its=3`, `code=1`;
 - initial feature backend: upstream raw depth plus CUDA heat/normalization;
-- stencil helper: the historical headline run used 32 CPU workers; the current runtime-configurable helper defaults to 8;
+- stencil helper: the historical headline run used 32 CPU workers; the final v0.1.0 runtime-configurable helper defaults to 8;
 - DARTEL and squaring: FP64 Triton with CUDA Graph enabled.
 
 ### Paired end-to-end A/B
@@ -72,7 +72,7 @@ Input per hemisphere:
 | LH | 119.914245 s | 45.084841 s | 2.659746x | 2.8491e-5 / 7.3001e-8 / 9.4995e-7 | exact |
 | RH | 119.405634 s | 46.986172 s | 2.541293x | 3.4094e-4 / 5.8125e-6 / 4.9412e-5 | exact |
 
-These are the conservative paired results used in the README. Later single-run exploratory profiles reached 38.15 seconds for LH and 37.26 seconds for RH, but those runs were not repeated as an interleaved benchmark and are therefore not used as the headline claim.
+These are the paired results used in the v0.1.0 README. Later single-run exploratory profiles reached 38.15 seconds for LH and 37.26 seconds for RH, but those runs were not repeated as an interleaved benchmark and are therefore not used as the headline claim.
 
 ### Representative RH GPU timeline
 
@@ -88,11 +88,11 @@ These are the conservative paired results used in the README. Later single-run e
 | Source runs + average DARTEL / warp | 19.380 | 41.25% |
 | Output | 0.823 | 1.75% |
 
-The remaining hotspot is the repeated solve/stencil lifecycle, not GIFTI writing or average combination.
+In this profile, the main remaining cost was the repeated solve/stencil lifecycle, not GIFTI writing or average combination.
 
 ### Runtime-configurable stencil workers
 
-The bundled helper now accepts `--threads N`, and the Python runners expose the same value as `--stencil-threads`. The default is 8; thread count is no longer fixed when the binary is compiled.
+The v0.1.0 bundled helper accepts `--threads N`, and the Python runners expose the same value as `--stencil-threads`. The default is 8; thread count is no longer fixed when the binary is compiled.
 
 On the same full-resolution LH sphere, three fresh helper runs per setting produced:
 
@@ -112,11 +112,11 @@ A final release-candidate smoke run after consolidating the package under the `c
 
 ### Final v0.1.0 reproducible-build audit
 
-After rebuilding all four bundled ELF files from the public `BUILDING.md` procedure, a fresh paired LH run on the same RTX 2080 Ti measured `126.6581 s` for the CPU reference and `35.0607 s` for the GPU path (`3.6125x`). Faces were exact; maximum/mean/p99 vertex errors were `5.4806e-5 / 2.1548e-7 / 3.4571e-6`. This is a single release audit, not a replacement for the conservative headline pair.
+After rebuilding all four bundled ELF files using the [v0.1.0 build procedure](https://github.com/ayakacxy/cat-surface-gpu/blob/v0.1.0/docs/BUILDING.md), a fresh paired LH run on the same RTX 2080 Ti measured `126.6581 s` for the CPU reference and `35.0607 s` for the GPU path (`3.6125x`). Faces were exact; maximum/mean/p99 vertex errors were `5.4806e-5 / 2.1548e-7 / 3.4571e-6`. This is a single release audit, not a replacement for the conservative headline pair.
 
 The rebuilt `CAT_Surf2Sphere` was also rerun on the 61,442-vertex LH input: CPU `54.9849 s`, GPU `10.6890 s`, or `5.1440x`. All 4,999 upstream sweeps executed, faces were exact, and maximum/mean/p99 vertex errors were `1.1444e-5 / 1.6734e-6 / 7.6294e-6`.
 
-The host-visible test suite completed with `34 passed, 1 skipped`; the sole skip is the mutually exclusive contract that checks behavior when CUDA is unavailable. The no-GPU suite completed with `33 passed, 2 skipped`.
+The host-visible test suite completed with `34 passed, 1 skipped`; the sole skip is the test that checks behavior when CUDA is unavailable. The no-GPU suite completed with `33 passed, 2 skipped`.
 
 ## Bilateral SimNIBS-default CAT chain
 
@@ -129,7 +129,7 @@ This benchmark runs both hemisphere processes concurrently for `CAT_Surf2Sphere`
 | Bilateral `CAT_SurfWarp` | 34.9756 s |
 | **Total** | **55.2573 s** |
 
-Final output validation against the latest CPU reference:
+Final output validation against the pinned CPU reference:
 
 | Hemisphere | Max / mean / p99 absolute error | Faces |
 | --- | ---: | --- |
@@ -140,17 +140,23 @@ This 55.26-second value covers only the CAT spherical-registration chain. It doe
 
 ## Reproducing the measurements
 
-After creating the Conda environment from the README, run a single-hemisphere warp A/B:
+Use a separate checkout of the [v0.1.0 tag](https://github.com/ayakacxy/cat-surface-gpu/tree/v0.1.0) and its installation instructions. The following command uses tools and binaries from that release; they are not part of v0.2.0. Set project-local working directories before running the single-hemisphere comparison:
 
 ```bash
+mkdir -p .work/v0.1-comparison/{tmp,cache/triton,cache/torch,output}
+export TMPDIR="$PWD/.work/v0.1-comparison/tmp" TMP="$PWD/.work/v0.1-comparison/tmp" TEMP="$PWD/.work/v0.1-comparison/tmp"
+export XDG_CACHE_HOME="$PWD/.work/v0.1-comparison/cache"
+export TRITON_CACHE_DIR="$PWD/.work/v0.1-comparison/cache/triton"
+export TORCH_HOME="$PWD/.work/v0.1-comparison/cache/torch"
+
 python tools/benchmark_cat_surface_end_to_end.py \
   --reference-cli bin/linux-x86_64/CAT_SurfWarp \
   --source-surface /path/to/white.gii \
   --source-sphere /path/to/sphere.gii \
   --target-surface /path/to/template.white.gii \
   --target-sphere /path/to/template.sphere.gii \
-  --cpu-output /tmp/sphere.cpu.gii \
-  --gpu-output /tmp/sphere.gpu.gii \
+  --cpu-output .work/v0.1-comparison/output/sphere.cpu.gii \
+  --gpu-output .work/v0.1-comparison/output/sphere.gpu.gii \
   --rotation-depth-probe bin/linux-x86_64/cat_surface_rotation_depth \
   --rotation-feature-backend cuda-official-depth \
   --stencil-builder bin/linux-x86_64/cat_surface_stencil_builder \

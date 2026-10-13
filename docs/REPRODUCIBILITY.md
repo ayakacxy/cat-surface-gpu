@@ -1,24 +1,44 @@
-# Reproducibility and Provenance Guide
+# Reproducibility and numerical comparisons
 
-## Immutable inputs
+## v0.2.0 release checks
 
-- Project version: `0.1.0`
-- CAT-Surface source: `628b6851d8638f3ab773cd25c0ec406d0ec61ede`
-- Native optimization flags: `-O2 -fPIC`
-- Prohibited flags: `-ffast-math`, `-Ofast`, implicit mixed precision, and architecture-specific `-march=native`
-- Recommended GPU path: FP64 DARTEL, ordered CAT-compatible `CAT_Surf2Sphere` arithmetic, and explicit CUDA failure
+On 2026-10-13, all 57 tests passed on an RTX 2080 Ti, including eight CUDA tests. The installed wheel completed both command-line workflows on full fsaverage templates, including passing the generated sphere to registration. A full fsaverage comparison with the source FlashCHARM Python modules produced identical sphere coordinates, registered coordinates, velocity fields, deformation fields, and objective values; triangles were unchanged. Each input had 163,842 vertices and 327,680 triangles. Scientific settings were the defaults, with `rotation_point_chunk=12288`.
 
-The authoritative source revision is machine-readable in [`UPSTREAM.lock`](../UPSTREAM.lock). Binary hashes are in [`bin/linux-x86_64/SHA256SUMS`](../bin/linux-x86_64/SHA256SUMS).
+The [machine-readable record](validation-v0.2.0.json) includes input hashes, dependency versions, parameters, and comparison results. This checks migration consistency for these templates. It is not a new official-C comparison or a multi-subject performance study. The separate zero-residual regression tests cover the PCG division-by-zero fix.
 
-## Validation layers
+## Record the version and environment
 
-1. Static checks: English-only public source, Python compilation, binary hashes, packaging contents, and ELF dependency inspection.
-2. CPU contracts: deterministic unit tests for indexing, interpolation, topology, scheduling, and reference/optimized operator equivalence.
-3. CUDA contracts: actual CUDA execution of Triton kernels; absence of a GPU is reported as a skip and never counted as CUDA validation.
-4. End-to-end A/B: identical GIFTI inputs and parameters, synchronized wall-clock timing, exact face arrays, and max/mean/p99 vertex errors.
+For v0.2.0, record:
 
-The private anatomical benchmark fixture is not distributed. It contains no data in the repository or release. The included synthetic fixture generator is intended for installation and structural smoke testing; it does not reproduce the headline performance numbers.
+- package version and source revision;
+- CAT-Surface reference revision `b0c2aa2395ea4957a331b9444fb54c7716b6572d`;
+- Python, NumPy, SciPy, Numba, nibabel, CuPy, CUDA, and driver versions;
+- GPU model, CPU thread count, and peak host/GPU memory;
+- input hashes, vertex/triangle counts, parameters, solver, and iteration count.
 
-## Performance claim boundary
+The fixed upstream revision is also recorded in [UPSTREAM.lock](../UPSTREAM.lock). Version 0.1.0 used a different revision and implementation; its evidence is archived in [BENCHMARKS.md](BENCHMARKS.md).
 
-The reported 55.2573-second bilateral number covers the CAT spherical-registration chain only. It is not a complete CHARM or SimNIBS runtime. Every headline value in [BENCHMARKS.md](BENCHMARKS.md) records hardware, software, input shapes, parameters, timing boundaries, and numerical acceptance criteria.
+## Validate in stages
+
+1. Inspect the built wheel and source archive for required code and notices, and confirm that no CAT executables or project-specific extensions are included.
+2. Run CPU tests for geometry, indexing, topology, interpolation, and input validation.
+3. Run CUDA tests on an actual NVIDIA GPU. Record skipped tests separately.
+4. Compare complete sphere and registered-sphere outputs against an independently run reference using the same inputs and parameters.
+
+For surface comparisons, report exact triangle equality and coordinate differences using clearly stated units. Include the maximum, mean, and an upper percentile; state whether errors are per-coordinate absolute differences or per-vertex Euclidean distances. Check finite coordinates and vertex counts before computing statistics.
+
+Version 0.2.0 defaults to a PCG linear solver. Upstream CAT-Surface uses FMG, so equal inputs and iteration labels do not imply identical solver trajectories. Set numerical tolerances before evaluating results and record which solver was used. The v0.1.0 `1e-3` threshold is not automatically a v0.2.0 acceptance threshold.
+
+## Measure the complete operation
+
+Measure input reading, preprocessing, transfers, GPU computation, output transfer, and file writing together when reporting end-to-end time. Synchronize the GPU before stopping timers. Report whether interpreter startup, Numba/CuPy compilation, and cache loading are included. Separate first-run measurements from repeated runs with established caches.
+
+Use repeated same-input runs and report the run count and spread. For bilateral runs, state whether hemispheres run serially or share the GPU concurrently. An isolated kernel speedup does not measure the complete registration workflow or the complete CHARM pipeline.
+
+## Synthetic and anatomical inputs
+
+The repository distributes no anatomical or subject data. Synthetic fixtures test installation, file I/O, and small numerical operations. Very coarse synthetic meshes can collapse during the full inflation schedule; use suitable anatomical meshes to validate the complete sphere-to-registration workflow. These fixtures do not reproduce anatomical performance or establish anatomical registration accuracy.
+
+Keep benchmark inputs read-only. Store caches, logs, reference outputs, and candidate outputs under separate paths within a task directory such as `.work/comparison/`. Set `TMPDIR`, `TMP`, `TEMP`, `XDG_CACHE_HOME`, `NUMBA_CACHE_DIR`, and `CUPY_CACHE_DIR` before running, as shown in the [README](../README.md#run).
+
+The upstream reference may be built and run separately for comparison. It is neither a dependency of the candidate workflow nor an automatic fallback.

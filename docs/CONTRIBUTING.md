@@ -1,35 +1,27 @@
 # Contributing to CAT-Surface GPU
 
-Thank you for improving CAT-Surface GPU. Correctness and reproducibility take priority over isolated kernel speed.
+Changes should preserve useful numerical results and make their effects easy to reproduce.
 
 ## Development setup
 
+Start with the [README installation steps](../README.md#install), which put temporary files and caches inside the checkout. Then run:
+
 ```bash
-conda env create -f environment.yml
-conda activate cat-surface-gpu
-python -m pip install torch==2.6.0 --index-url https://download.pytorch.org/whl/cu126
 python -m pip install -e '.[cuda,test]'
-pytest -q
+python -m pytest -q --basetemp .work/setup/tmp/pytest
+python scripts/verify_release.py
 ```
 
-## Scientific contract
+CPU tests can run without CuPy or a GPU. CUDA tests require a working NVIDIA device; report skips separately.
 
-- Preserve the pinned CAT-Surface algorithm, resolution, iteration counts, stopping conditions, update dependencies, reduction order, and tie-breaking semantics.
-- Keep the reference path available. An optimized backend must fail explicitly instead of silently falling back.
-- Do not use `-ffast-math`, `-Ofast`, implicit autocast, or unapproved floating-point reordering.
-- Optimize one measurable hotspot at a time and keep it independently reviewable.
-- Validate on identical inputs, shapes, precision, and parameters before reporting speed.
+## Algorithm changes
 
-## Required evidence
+Describe which upstream operation changes and why. Preserve mesh indexing, supported parameters, and stopping conditions unless the change explicitly calls for a different algorithm. Keep failures visible instead of silently switching to a different implementation.
 
-Algorithm changes require CPU contracts and a real-CUDA A/B. Report hardware, software, timing boundary, warm-up, synchronization, repetitions, peak memory, exact face equality, and max/mean/p99 vertex errors. A CUDA skip is not a CUDA pass.
+Before reporting an improvement, compare the same inputs and settings. Include triangle equality, coordinate errors, solver choice, precision, timing scope, repetitions, and peak memory. See [reproducibility](REPRODUCIBILITY.md) for the details. Never commit anatomical or identifiable medical data.
 
-Public source comments, docstrings, CLI text, tests, and error messages must be in English. Never commit anatomical or identifiable medical data.
+New code comments and docstrings use Chinese. Preserve third-party copyright and license notices in their original language. User documentation is available in English and Simplified Chinese.
 
 ## Pull requests
 
-Create a focused branch, run `python scripts/verify_release.py` and `pytest -q`, and complete the pull-request checklist. Commits materially produced with Codex should retain the project attribution trailer:
-
-```text
-Co-authored-by: Codex <codex@openai.com>
-```
+Keep changes focused and describe the resulting behavior, relevant numerical differences, and tests run. If a test needs an unavailable GPU or private fixture, say so. Identify the source of adapted code and retain the relevant author and license notices.

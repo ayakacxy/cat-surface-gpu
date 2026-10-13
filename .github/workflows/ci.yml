@@ -13,46 +13,48 @@ jobs:
   test-and-package:
     runs-on: ubuntu-22.04
     timeout-minutes: 30
+    env:
+      TMPDIR: ${{ github.workspace }}/.work/ci/tmp
+      TMP: ${{ github.workspace }}/.work/ci/tmp
+      TEMP: ${{ github.workspace }}/.work/ci/tmp
+      XDG_CACHE_HOME: ${{ github.workspace }}/.work/ci/cache
+      PIP_CACHE_DIR: ${{ github.workspace }}/.work/ci/cache/pip
+      NUMBA_CACHE_DIR: ${{ github.workspace }}/.work/ci/cache/numba
+      PYTHONPYCACHEPREFIX: ${{ github.workspace }}/.work/ci/cache/pycache
+      RUFF_CACHE_DIR: ${{ github.workspace }}/.work/ci/cache/ruff
+      OMP_NUM_THREADS: "8"
+      OPENBLAS_NUM_THREADS: "8"
+      NUMBA_NUM_THREADS: "8"
     steps:
       - uses: actions/checkout@v7
+      - name: Prepare project-local work directories
+        run: mkdir -p "$TMPDIR" "$XDG_CACHE_HOME"
       - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
-          cache: pip
       - name: Install CPU test environment
         run: |
           python -m pip install --upgrade pip
-          python -m pip install torch==2.6.0 --index-url https://download.pytorch.org/whl/cpu
-          python -m pip install '.[test]' build
-      - name: Verify source and committed binaries
+          python -m pip install '.[test]'
+      - name: Verify source
         run: python scripts/verify_release.py
       - name: Lint and format check
         run: |
           ruff check src tests tools scripts setup.py
           ruff format --check src tests tools scripts setup.py
-      - name: Run CPU contracts
-        run: pytest -q
-      - name: Run bundled-helper synthetic smoke test
-        run: |
-          python tools/generate_synthetic_fixture.py --output /tmp/cat-surface-gpu-smoke --subdivisions 2
-          bin/linux-x86_64/cat_surface_stencil_builder \
-            /tmp/cat-surface-gpu-smoke/source.sphere.gii \
-            /tmp/cat-surface-gpu-smoke/source.stencil \
-            --surface /tmp/cat-surface-gpu-smoke/source.white.gii \
-            --threads 2
-          test -s /tmp/cat-surface-gpu-smoke/source.stencil
+      - name: Run CPU tests
+        run: pytest -q --basetemp .work/ci/pytest -o cache_dir=.work/ci/cache/pytest
       - name: Build wheel and source archive
-        run: python -m build
+        run: python -m build --outdir .work/ci/dist
       - name: Verify wheel contents
-        run: python scripts/verify_release.py --wheel "$(find dist -name '*.whl' -print -quit)"
+        run: python scripts/verify_release.py --wheel .work/ci/dist/cat_surface_gpu-0.2.0-py3-none-any.whl
       - name: Test installed command-line interfaces
         run: |
-          python -m pip install --force-reinstall --no-deps dist/*.whl
+          python -m pip install --force-reinstall --no-deps .work/ci/dist/*.whl
           cat-surf2sphere-gpu --help
           cat-surfwarp-gpu --help
-          cat-surface-rotation-gpu --help
       - uses: actions/upload-artifact@v7
         with:
           name: python-distributions
-          path: dist/*
+          path: .work/ci/dist/*
           if-no-files-found: error
