@@ -1,5 +1,7 @@
 ## CAT-Surface GPU v0.2.0
 
+[English](RELEASE_v0.2.0.md) · [简体中文](RELEASE_v0.2.0.zh-CN.md)
+
 Version 0.2.0 provides a native Python implementation of `CAT_Surf2Sphere` and `CAT_SurfWarp` using NumPy, Numba, and CuPy. Spherical inflation and surface registration run independently, without the CAT executable helpers used by v0.1.0.
 
 ### Highlights
@@ -31,11 +33,3 @@ The [validation record](https://github.com/ayakacxy/cat-surface-gpu/blob/v0.2.0/
 Use Python 3.11 or newer and an NVIDIA driver compatible with your CuPy build. The documented CUDA 12.x setup installs `cupy-cuda12x`. See the [English README](https://github.com/ayakacxy/cat-surface-gpu/blob/v0.2.0/README.md) or [简体中文说明](https://github.com/ayakacxy/cat-surface-gpu/blob/v0.2.0/README.zh-CN.md) for Conda and wheel installation commands.
 
 Licensed under GPL-3.0-or-later. CAT-Surface attribution and license information are included in `THIRD_PARTY_NOTICES.md` and the corresponding source archive.
-
-### 中文说明
-
-v0.2.0 使用 NumPy、Numba 和 CuPy 原生 Python 实现球面膨胀与曲面配准，覆盖深度特征、初始旋转、球面重采样、DARTEL、平均和 GIFTI 输出。项目可独立安装运行，无需旧版的 CAT 辅助程序、PyTorch 或 Triton。Numba 和 CuPy 仍会在运行时编译内核，完整流程需要 NVIDIA GPU。
-
-上游参考版本更新为固定提交 `b0c2aa23`，配准默认每次线性求解执行 40 次双精度 PCG 迭代。两个主要命令名称保留，旧版后端选项与 Python 接口需按迁移说明更新。v0.1.0 的性能数据仍归属于旧版。
-
-RTX 2080 Ti 上 57 项测试全部通过，包含 8 项 CUDA 测试。安装后的两个命令完成了完整 fsaverage 模板的球面生成与后续配准，输出保留 163,842 个顶点和 327,680 个三角形，坐标有限且无退化面。

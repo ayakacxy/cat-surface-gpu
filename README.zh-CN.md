@@ -9,10 +9,10 @@
 [![CI](https://github.com/ayakacxy/cat-surface-gpu/actions/workflows/ci.yml/badge.svg)](https://github.com/ayakacxy/cat-surface-gpu/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/ayakacxy/cat-surface-gpu/actions/workflows/codeql.yml/badge.svg)](https://github.com/ayakacxy/cat-surface-gpu/actions/workflows/codeql.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB.svg?logo=python&logoColor=white)](pyproject.toml)
-[![已测试 CUDA 12.6](https://img.shields.io/badge/CUDA-12.6-76B900.svg?logo=nvidia&logoColor=white)](docs/RELEASE_v0.2.0.md)
-[![Linux x86-64](https://img.shields.io/badge/platform-Linux%20x86--64-lightgrey.svg)](docs/IMPLEMENTATION.md)
+[![已测试 CUDA 12.6](https://img.shields.io/badge/CUDA-12.6-76B900.svg?logo=nvidia&logoColor=white)](docs/RELEASE_v0.2.0.zh-CN.md)
+[![Linux x86-64](https://img.shields.io/badge/platform-Linux%20x86--64-lightgrey.svg)](docs/IMPLEMENTATION.zh-CN.md)
 
-[English](README.md) · [文档目录](docs/README.md) · [详细性能报告](docs/BENCHMARKS.md) · [源码构建](docs/BUILDING.md) · [上游致谢](THIRD_PARTY_NOTICES.md)
+[English](README.md) · [文档目录](docs/README.zh-CN.md) · [详细性能报告](docs/BENCHMARKS.zh-CN.md) · [源码构建](docs/BUILDING.zh-CN.md) · [上游致谢](THIRD_PARTY_NOTICES.zh-CN.md)
 
 ⚡ **GPU 加速** · 🧠 **曲面配准** · 🧪 **CUDA 实测** · 📦 **Python 软件包**
 
@@ -36,7 +36,7 @@ v0.2.0 在 NVIDIA GeForce RTX 2080 Ti、Python 3.11 和 CUDA 12.6 环境中完�
 | 输入网格 | 每个输入 163,842 个顶点、327,680 个三角面 |
 | 输出检查 | 坐标均为有限值，三角面数组保持不变 |
 
-这些检查确认了发布包可以完成相应流程，本次不据此给出新版加速比。详情见 [v0.2.0 版本说明](docs/RELEASE_v0.2.0.md)和[验证记录](docs/validation-v0.2.0.json)。
+这些检查确认了发布包可以完成相应流程，本次不据此给出新版加速比。详情见 [v0.2.0 版本说明](docs/RELEASE_v0.2.0.zh-CN.md)和[验证记录](docs/validation-v0.2.0.json)。
 
 以下是 **v0.1.0** 的历史数据，该版使用 PyTorch/Triton 和 CPU 辅助程序：
 
@@ -46,7 +46,7 @@ v0.2.0 在 NVIDIA GeForce RTX 2080 Ti、Python 3.11 和 CUDA 12.6 环境中完�
 | `CAT_SurfWarp` | LH，`steps=2`、`runs=2`、`avg` | 119.9142 s | 45.0848 s | 2.66x |
 | `CAT_SurfWarp` | RH，参数同上 | 119.4056 s | 46.9862 s | 2.54x |
 
-同一环境下，v0.1.0 双半球 CAT 配准流程实测为 **55.2573 秒**，不包含完整 CHARM 流程。硬件、参数、计时范围和误差数据保留在 [BENCHMARKS.md](docs/BENCHMARKS.md) 中；这些数字不能用来代表 v0.2.0。
+同一环境下，v0.1.0 双半球 CAT 配准流程实测为 **55.2573 秒**，不包含完整 CHARM 流程。硬件、参数、计时范围和误差数据保留在 [历史性能记录](docs/BENCHMARKS.zh-CN.md) 中；这些数字不能用来代表 v0.2.0。
 
 ## 🧩 环境要求
 
@@ -82,7 +82,7 @@ conda activate "$PWD/.work/setup/env"
 python -m pip install '.[cuda,test]'
 ```
 
-已有 Python 环境时可以直接使用相同的 `pip` 命令安装。wheel 和源码包的构建方法见 [BUILDING.md](docs/BUILDING.md)。
+已有 Python 环境时可以直接使用相同的 `pip` 命令安装。wheel 和源码包的构建方法见 [构建说明](docs/BUILDING.zh-CN.md)。
 
 检查环境并运行测试：
 
@@ -155,19 +155,19 @@ cat-surfwarp-gpu \
 
 | 版本 | 实现方式 | CAT-Surface 参考版本 |
 | --- | --- | --- |
-| [v0.2.0](docs/RELEASE_v0.2.0.md) | Python、NumPy/Numba 和 CuPy，不附带 CAT 可执行文件 | [`b0c2aa23`](https://github.com/ChristianGaser/CAT-Surface/tree/b0c2aa2395ea4957a331b9444fb54c7716b6572d) |
-| [v0.1.0](docs/RELEASE_v0.1.0.md) | PyTorch/Triton，配合随包发布的 CPU 参考程序和辅助程序 | [`628b6851`](https://github.com/ChristianGaser/CAT-Surface/tree/628b6851d8638f3ab773cd25c0ec406d0ec61ede) |
+| [v0.2.0](docs/RELEASE_v0.2.0.zh-CN.md) | Python、NumPy/Numba 和 CuPy，不附带 CAT 可执行文件 | [`b0c2aa23`](https://github.com/ChristianGaser/CAT-Surface/tree/b0c2aa2395ea4957a331b9444fb54c7716b6572d) |
+| [v0.1.0](docs/RELEASE_v0.1.0.zh-CN.md) | PyTorch/Triton，配合随包发布的 CPU 参考程序和辅助程序 | [`628b6851`](https://github.com/ChristianGaser/CAT-Surface/tree/628b6851d8638f3ab773cd25c0ec406d0ec61ede) |
 
 v0.2.0 wheel 包含 Python 实现和内嵌 CUDA 内核源码，不包含解剖数据或模板。发行文件另提供项目源码包、固定版本的 CAT-Surface 源码包、依赖清单和校验文件。
 
-两个主要命令名称保留，后端选项和 Python 接口已有调整。从 v0.1.0 升级时请参考[迁移说明](docs/MIGRATION.md)。
+两个主要命令名称保留，后端选项和 Python 接口已有调整。从 v0.1.0 升级时请参考[迁移说明](docs/MIGRATION.zh-CN.md)。
 
 ## 🎯 数值检查与 Python 接口
 
 - 三角面数组保留源网格的索引。
 - 默认配准使用双精度 DARTEL，每次线性求解执行 40 次 PCG 迭代。
 - PCG 与上游 FMG 的计算过程不同，比较结果时需记录求解器和参考版本。
-- 当前配准支持使用 type-5 特征的一步或两步流程，具体设置见[实现说明](docs/IMPLEMENTATION.md)。
+- 当前配准支持使用 type-5 特征的一步或两步流程，具体设置见[实现说明](docs/IMPLEMENTATION.zh-CN.md)。
 - v0.1.0 使用的误差阈值不能直接套用到 v0.2.0。
 
 安装后的公共 Python 命名空间仍为 `cat_surface_gpu`：
@@ -191,7 +191,7 @@ save_gifti_surface(
 )
 ```
 
-配准接口为 `SurfWarpParameters` 和 `surfwarp_cupy`，完整调用示例及输入要求见[实现说明](docs/IMPLEMENTATION.md)。
+配准接口为 `SurfWarpParameters` 和 `surfwarp_cupy`，完整调用示例及输入要求见[实现说明](docs/IMPLEMENTATION.zh-CN.md)。
 
 ## 🗂️ 仓库结构
 
@@ -217,14 +217,14 @@ python scripts/verify_release.py
 
 ## 🛠️ 开发与发行检查
 
-- [BUILDING.md](docs/BUILDING.md)：wheel、源码包和发行文件的构建方法。
-- [REPRODUCIBILITY.md](docs/REPRODUCIBILITY.md)：数值比较与计时方法。
-- [CONTRIBUTING.md](docs/CONTRIBUTING.md)：开发要求与验证记录。
-- [SECURITY.md](docs/SECURITY.md)：漏洞报告方式。
-- [CHANGELOG.md](docs/CHANGELOG.md)：各版本的主要变化。
+- [构建说明](docs/BUILDING.zh-CN.md)：wheel、源码包和发行文件的构建方法。
+- [复现说明](docs/REPRODUCIBILITY.zh-CN.md)：数值比较与计时方法。
+- [贡献指南](docs/CONTRIBUTING.zh-CN.md)：开发要求与验证记录。
+- [安全说明](docs/SECURITY.zh-CN.md)：漏洞报告方式。
+- [更新日志](docs/CHANGELOG.zh-CN.md)：各版本的主要变化。
 
 ## 🙏 上游致谢和许可证
 
-本项目基于 Christian Gaser 开发的 [CAT-Surface](https://github.com/ChristianGaser/CAT-Surface) 及 [SimNIBS](https://github.com/simnibs/simnibs) 使用的 CAT 曲面配准流程。DARTEL 源于 John Ashburner 的工作，具体来源、固定版本和致谢见[第三方说明](THIRD_PARTY_NOTICES.md)。
+本项目基于 Christian Gaser 开发的 [CAT-Surface](https://github.com/ChristianGaser/CAT-Surface) 及 [SimNIBS](https://github.com/simnibs/simnibs) 使用的 CAT 曲面配准流程。DARTEL 源于 John Ashburner 的工作，具体来源、固定版本和致谢见[第三方说明](THIRD_PARTY_NOTICES.zh-CN.md)。
 
 本项目代码采用 [GPL-3.0-or-later](LICENSE)，上游组件保留各自许可和版权说明。

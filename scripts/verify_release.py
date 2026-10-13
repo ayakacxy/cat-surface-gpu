@@ -48,6 +48,7 @@ def check_wheel(path: Path, version: str) -> None:
             ".dist-info/entry_points.txt",
             ".dist-info/licenses/LICENSE",
             ".dist-info/licenses/THIRD_PARTY_NOTICES.md",
+            ".dist-info/licenses/THIRD_PARTY_NOTICES.zh-CN.md",
             ".dist-info/licenses/upstream/CAT-Surface-LICENSE.txt",
         ):
             if not any(name.endswith(suffix) for name in names):

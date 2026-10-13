@@ -1,5 +1,7 @@
 # Third-party notices
 
+[English](THIRD_PARTY_NOTICES.md) · [简体中文](THIRD_PARTY_NOTICES.zh-CN.md)
+
 ## CAT-Surface
 
 The algorithms derive from [CAT-Surface](https://github.com/ChristianGaser/CAT-Surface), developed by Christian Gaser at Jena University Hospital.

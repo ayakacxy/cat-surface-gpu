@@ -12,6 +12,7 @@ license = "GPL-3.0-or-later"
 license-files = [
     "LICENSE",
     "THIRD_PARTY_NOTICES.md",
+    "THIRD_PARTY_NOTICES.zh-CN.md",
     "upstream/CAT-Surface-LICENSE.txt",
 ]
 authors = [

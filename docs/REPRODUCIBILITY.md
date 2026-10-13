@@ -1,5 +1,7 @@
 # Reproducibility and Provenance Guide
 
+[English](REPRODUCIBILITY.md) · [简体中文](REPRODUCIBILITY.zh-CN.md)
+
 ## v0.2.0 release checks
 
 On 2026-10-13, all 57 tests passed on an RTX 2080 Ti, including eight CUDA tests. The installed wheel completed both command-line workflows on full fsaverage templates, passing the generated sphere directly to registration. Each input had 163,842 vertices and 327,680 triangles. Both commands used their default settings, including `rotation_point_chunk=16384` for registration. Outputs retained the input triangles and contained finite coordinates with no zero-area triangles.

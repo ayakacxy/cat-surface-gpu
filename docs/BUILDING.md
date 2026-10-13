@@ -1,5 +1,7 @@
 # Building from Source
 
+[English](BUILDING.md) · [简体中文](BUILDING.zh-CN.md)
+
 Version 0.2.0 ships Python source. Building the package does not compile or bundle CAT-Surface executables, project-specific native extensions, or CUDA binaries. Numba and CuPy compile kernels when the relevant functions run.
 
 ## Build a wheel and source archive
@@ -61,3 +63,5 @@ The upstream archive is provided separately for source reference. It is not inst
 ## Rebuilding v0.1.0
 
 The earlier release includes four Linux executables and a different build procedure. Use the source and [build guide at the v0.1.0 tag](https://github.com/ayakacxy/cat-surface-gpu/blob/v0.1.0/docs/BUILDING.md) in a separate checkout if you need to reproduce those binaries. The v0.2.0 package does not use them.
+
+[Documentation index](README.md) · [Project README](../README.md)

@@ -1,5 +1,7 @@
 # Implementation and Python API
 
+[English](IMPLEMENTATION.md) · [简体中文](IMPLEMENTATION.zh-CN.md)
+
 Version 0.2.0 implements spherical inflation and cortical surface registration in `cat_surface_gpu`. Its algorithm reference is CAT-Surface revision [`b0c2aa2395ea4957a331b9444fb54c7716b6572d`](https://github.com/ChristianGaser/CAT-Surface/tree/b0c2aa2395ea4957a331b9444fb54c7716b6572d).
 
 ## Execution
@@ -104,3 +106,5 @@ Lowering `rotation_point_chunk` from its default of `16384`, for example to `122
 ## Command-line output
 
 Both commands support `--device cuda` or `--device cuda:N`, `--threads`, and `--quiet`. They write stage progress to standard error and a final JSON summary to standard output. Use `--help` for the full option list.
+
+[Documentation index](README.md) · [Project README](../README.md)

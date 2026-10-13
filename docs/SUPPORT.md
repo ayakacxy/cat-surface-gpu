@@ -1,5 +1,7 @@
 # Support and Questions
 
+[English](SUPPORT.md) · [简体中文](SUPPORT.zh-CN.md)
+
 Use GitHub Discussions for installation and usage questions, and the structured issue templates for reproducible bugs or performance reports. Search existing reports first.
 
 This is an independent acceleration project, not an official SimNIBS or CAT-Surface support channel. Questions about upstream behavior should be directed to the relevant upstream project.

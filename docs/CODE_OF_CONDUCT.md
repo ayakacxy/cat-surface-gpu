@@ -1,5 +1,7 @@
 # Community Code of Conduct
 
+[English](CODE_OF_CONDUCT.md) · [简体中文](CODE_OF_CONDUCT.zh-CN.md)
+
 We are committed to a respectful, harassment-free community. Be constructive, assume good faith, focus criticism on technical work, respect privacy, and welcome contributors regardless of background or experience.
 
 Unacceptable behavior includes harassment, discrimination, threats, deliberate disclosure of private information, and sustained disruption. Maintainers may edit or remove contributions and restrict participation when necessary to protect the community.

@@ -1,5 +1,7 @@
 # Contributing to CAT-Surface GPU
 
+[English](CONTRIBUTING.md) · [简体中文](CONTRIBUTING.zh-CN.md)
+
 Changes should preserve useful numerical results and make their effects easy to reproduce.
 
 ## Development setup

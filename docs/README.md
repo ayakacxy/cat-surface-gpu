@@ -1,18 +1,21 @@
 # Documentation
 
+[English](README.md) · [简体中文](README.zh-CN.md)
+
 This directory contains the detailed project, validation, and community documentation.
 
-- [Implementation and Python API](IMPLEMENTATION.md)
-- [Performance and accuracy benchmarks — v0.1.0](BENCHMARKS.md)
-- [Building and packaging](BUILDING.md)
-- [Reproducibility and numerical comparisons](REPRODUCIBILITY.md)
-- [Migrating from v0.1.0](MIGRATION.md)
-- [v0.2.0 release notes](RELEASE_v0.2.0.md)
-- [v0.1.0 release notes](RELEASE_v0.1.0.md)
-- [Contribution guide](CONTRIBUTING.md)
-- [Security and vulnerability reporting](SECURITY.md)
-- [Support](SUPPORT.md)
-- [Community Code of Conduct](CODE_OF_CONDUCT.md)
-- [Project changelog](CHANGELOG.md)
+- Implementation and Python API: [English](IMPLEMENTATION.md) · [简体中文](IMPLEMENTATION.zh-CN.md)
+- Performance and accuracy benchmarks — v0.1.0: [English](BENCHMARKS.md) · [简体中文](BENCHMARKS.zh-CN.md)
+- Building and packaging: [English](BUILDING.md) · [简体中文](BUILDING.zh-CN.md)
+- Reproducibility and numerical comparisons: [English](REPRODUCIBILITY.md) · [简体中文](REPRODUCIBILITY.zh-CN.md)
+- Migrating from v0.1.0: [English](MIGRATION.md) · [简体中文](MIGRATION.zh-CN.md)
+- v0.2.0 release notes: [English](RELEASE_v0.2.0.md) · [简体中文](RELEASE_v0.2.0.zh-CN.md)
+- v0.1.0 release notes: [English](RELEASE_v0.1.0.md) · [简体中文](RELEASE_v0.1.0.zh-CN.md)
+- Contribution guide: [English](CONTRIBUTING.md) · [简体中文](CONTRIBUTING.zh-CN.md)
+- Security and vulnerability reporting: [English](SECURITY.md) · [简体中文](SECURITY.zh-CN.md)
+- Support: [English](SUPPORT.md) · [简体中文](SUPPORT.zh-CN.md)
+- Community Code of Conduct: [English](CODE_OF_CONDUCT.md) · [简体中文](CODE_OF_CONDUCT.zh-CN.md)
+- Project changelog: [English](CHANGELOG.md) · [简体中文](CHANGELOG.zh-CN.md)
+- Third-party notices: [English](../THIRD_PARTY_NOTICES.md) · [简体中文](../THIRD_PARTY_NOTICES.zh-CN.md)
 
 For installation and usage, start with the [English README](../README.md) or the [Simplified Chinese README](../README.zh-CN.md).

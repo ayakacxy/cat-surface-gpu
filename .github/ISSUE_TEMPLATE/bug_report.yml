@@ -1,43 +1,43 @@
-name: Bug report
-description: Report a reproducible correctness, installation, or runtime problem.
-title: "[Bug]: "
+name: Bug report / 缺陷报告
+description: Report a reproducible correctness, installation, or runtime problem. / 报告可复现的计算结果、安装或运行问题。
+title: "[Bug / 缺陷]: "
 labels: [bug]
 body:
   - type: markdown
     attributes:
-      value: Do not attach identifiable medical data. Use synthetic or anonymized inputs.
+      value: Do not attach identifiable medical data. Use synthetic or anonymized inputs. / 不要附加可识别身份的医学数据，请使用合成或匿名化的输入。
   - type: textarea
     id: summary
     attributes:
-      label: Summary
-      description: What happened and what did you expect?
+      label: Summary / 问题概要
+      description: What happened and what did you expect? / 实际发生了什么？你预期的结果是什么？
     validations:
       required: true
   - type: textarea
     id: environment
     attributes:
-      label: Environment
-      description: Include OS, GPU, driver, Python, CuPy, NumPy, Numba, and package version.
+      label: Environment / 运行环境
+      description: Include OS, GPU, driver, Python, CuPy, NumPy, Numba, and package version. / 请提供操作系统、GPU、驱动、Python、CuPy、NumPy、Numba 和本软件包版本。
     validations:
       required: true
   - type: textarea
     id: command
     attributes:
-      label: Reproduction command
+      label: Reproduction command / 复现命令
       render: shell
     validations:
       required: true
   - type: textarea
     id: logs
     attributes:
-      label: Error output
+      label: Error output / 报错信息
       render: text
   - type: checkboxes
     id: checks
     attributes:
-      label: Safety checks
+      label: Safety checks / 提交前检查
       options:
-        - label: I removed personal, clinical, and identifiable data.
+        - label: I removed personal, clinical, and identifiable data. / 我已移除个人、临床及可识别身份的数据。
           required: true
-        - label: I confirmed that CUDA was actually visible if this is a GPU report.
+        - label: I confirmed that CUDA was actually visible if this is a GPU report. / 如果这是 GPU 相关报告，我已确认运行环境能够访问 CUDA 设备。
           required: true
