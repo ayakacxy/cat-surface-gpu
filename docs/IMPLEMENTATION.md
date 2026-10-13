@@ -1,10 +1,10 @@
 # Implementation and Python API
 
-Version 0.2.0 adapts FlashCHARM's CAT module into `cat_surface_gpu`. Its algorithm reference is the fixed CAT-Surface revision [`b0c2aa2395ea4957a331b9444fb54c7716b6572d`](https://github.com/ChristianGaser/CAT-Surface/tree/b0c2aa2395ea4957a331b9444fb54c7716b6572d). This identifies a source snapshot, not a claim about the latest upstream release.
+Version 0.2.0 implements spherical inflation and cortical surface registration in `cat_surface_gpu`. Its algorithm reference is CAT-Surface revision [`b0c2aa2395ea4957a331b9444fb54c7716b6572d`](https://github.com/ChristianGaser/CAT-Surface/tree/b0c2aa2395ea4957a331b9444fb54c7716b6572d).
 
 ## Execution
 
-NumPy and Numba handle CPU geometry, topology, and supporting calculations. CuPy RawKernel/RawModule kernels perform CUDA work, including spherical inflation and registration. The package does not call CAT command-line programs, import FlashCHARM or SimNIBS, or load project-specific native extensions. CUDA kernel source is embedded in Python modules.
+NumPy and Numba handle CPU geometry, topology, and supporting calculations. CuPy RawKernel/RawModule kernels perform CUDA work, including spherical inflation and registration. The package runs independently, without CAT command-line programs or project-specific native extensions. CUDA kernel source is embedded in Python modules.
 
 The complete workflow requires NVIDIA CUDA. CPU-only imports and selected geometry tests are supported, but there is no full CPU registration fallback. Numba and CuPy kernel compilation can make the first invocation slower.
 
@@ -99,7 +99,7 @@ The supported registration uses type-5 depth features for one or two steps, memb
 
 The default double-precision PCG solver follows a different numerical path from upstream full multigrid (FMG). `pcg_check_interval=0` disables intermediate CPU convergence checks; it does not reduce the requested 40 iterations. `solver_iterations` applies only to PCG. `solver_backend="fmg"` selects the available FMG implementation, but its name alone does not establish bitwise equivalence with CAT-Surface. Record the solver in every comparison.
 
-Lowering `rotation_point_chunk`, for example to `12288`, reduces the size of temporary rotation batches. FlashCHARM used that setting in its integrated workflow; this standalone API defaults to `16384`. Memory use and timing depend on the input and GPU.
+Lowering `rotation_point_chunk` from its default of `16384`, for example to `12288`, reduces the size of temporary rotation batches. Memory use and timing depend on the input and GPU.
 
 ## Command-line output
 

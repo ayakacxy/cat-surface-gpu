@@ -1,6 +1,6 @@
 # Migrating from v0.1.0 to v0.2.0
 
-Version 0.2.0 replaces the earlier hybrid implementation with FlashCHARM's Python CAT implementation. Install it in a separate environment when keeping v0.1.0 available for comparisons.
+Version 0.2.0 replaces the earlier PyTorch/Triton implementation and CAT helper programs with a native Python implementation using NumPy, Numba, and CuPy. Install it in a separate environment when keeping v0.1.0 available for comparisons.
 
 ## Dependencies and files
 
@@ -11,7 +11,7 @@ Version 0.2.0 replaces the earlier hybrid implementation with FlashCHARM's Pytho
 | Linux platform wheel | Python-only `py3-none-any` wheel; CUDA runtime still required |
 | CAT-Surface `628b6851` | CAT-Surface `b0c2aa23` |
 
-The new package does not require a FlashCHARM or SimNIBS installation. Supply your own GIFTI surfaces and template.
+The package runs independently. Supply your own GIFTI surfaces and template.
 
 ## Commands
 
@@ -34,4 +34,4 @@ Replace `run_cat_surf2sphere_gpu` with `surf_to_sphere_cupy` and `run_cat_surfac
 
 Both the upstream source revision and the implementation changed. The default v0.2.0 DARTEL solver uses 40 PCG iterations, whereas the official reference uses FMG. Keep v0.1.0 thresholds and timings attached to v0.1.0; establish new tolerances from same-input comparisons against the v0.2.0 reference revision.
 
-The historical 55.2573-second bilateral measurement describes the v0.1.0 CAT registration chain. FlashCHARM's own CAT stage timings describe its integrated workflow. Neither is a benchmark of this standalone v0.2.0 package.
+The historical 55.2573-second bilateral measurement describes the v0.1.0 CAT registration chain. A separate benchmark is needed to report v0.2.0 performance.

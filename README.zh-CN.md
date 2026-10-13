@@ -1,56 +1,110 @@
+<div align="center">
+
 # CAT-Surface GPU
 
-CAT-Surface 球面膨胀与皮层曲面配准的 Python 实现，使用 CuPy CUDA kernel 加速。
+面向 `CAT_Surf2Sphere` 与 `CAT_SurfWarp` 曲面配准的 GPU 加速实现，使用 Python 和 CuPy。
 
 [![许可证：GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
 [![正式版本](https://img.shields.io/github/v/release/ayakacxy/cat-surface-gpu?display_name=tag&sort=semver)](https://github.com/ayakacxy/cat-surface-gpu/releases/latest)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB.svg)](pyproject.toml)
+[![CI](https://github.com/ayakacxy/cat-surface-gpu/actions/workflows/ci.yml/badge.svg)](https://github.com/ayakacxy/cat-surface-gpu/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/ayakacxy/cat-surface-gpu/actions/workflows/codeql.yml/badge.svg)](https://github.com/ayakacxy/cat-surface-gpu/actions/workflows/codeql.yml)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB.svg?logo=python&logoColor=white)](pyproject.toml)
+[![已测试 CUDA 12.6](https://img.shields.io/badge/CUDA-12.6-76B900.svg?logo=nvidia&logoColor=white)](docs/RELEASE_v0.2.0.md)
+[![Linux x86-64](https://img.shields.io/badge/platform-Linux%20x86--64-lightgrey.svg)](docs/IMPLEMENTATION.md)
 
-[English](README.md) · [文档目录](docs/README.md) · [版本说明](docs/RELEASE_v0.2.0.md) · [上游致谢](THIRD_PARTY_NOTICES.md)
+[English](README.md) · [文档目录](docs/README.md) · [详细性能报告](docs/BENCHMARKS.md) · [源码构建](docs/BUILDING.md) · [上游致谢](THIRD_PARTY_NOTICES.md)
 
-**0.2.0** 将 FlashCHARM 中的 CAT 实现移植为独立软件包，包含：
+⚡ **GPU 加速** · 🧠 **曲面配准** · 🧪 **CUDA 实测** · 📦 **Python 软件包**
+
+</div>
+
+本仓库提供 CAT-Surface/SimNIBS 皮层曲面配准中的两个组件：
 
 - `CAT_Surf2Sphere`：皮层曲面膨胀与球面投影。
 - `CAT_SurfWarp`：深度特征、初始旋转、球面重采样、DARTEL 配准、平均以及配准球面输出。
 
-本版使用 NumPy/Numba 完成 CPU 计算，使用 CuPy 执行 CUDA kernel。这里的“原生 Python 实现”是指不再调用 CAT 外部程序，也不加载本项目专用的 C/Cython 扩展；wheel 中发布的是 Python 源码。Numba 和 CuPy 仍会在运行时编译计算内核，完整流程需要 NVIDIA GPU。PyTorch 和 Triton 已不再是依赖。
+**0.2.0** 采用原生 Python 实现，使用 NumPy/Numba 完成 CPU 计算，使用 CuPy 执行 CUDA kernel。这里的“原生 Python”是指不再调用 CAT 外部程序，也不加载本项目专用的 C/Cython 扩展；Numba 和 CuPy 仍会在运行时编译计算内核，完整流程需要 NVIDIA GPU。PyTorch 和 Triton 已不再是依赖。
 
-## 版本区别
+## ⚡ 验证与性能概览
 
-| 版本 | 实现方式 | CAT-Surface 参考版本 |
-| --- | --- | --- |
-| [0.2.0](docs/RELEASE_v0.2.0.md) | Python、NumPy/Numba 和 CuPy，不附带 CAT 可执行文件 | [`b0c2aa23`](https://github.com/ChristianGaser/CAT-Surface/tree/b0c2aa2395ea4957a331b9444fb54c7716b6572d) |
-| [0.1.0](docs/RELEASE_v0.1.0.md) | PyTorch/Triton 加速，配合随包发布的 CPU 参考程序和辅助程序 | [`628b6851`](https://github.com/ChristianGaser/CAT-Surface/tree/628b6851d8638f3ab773cd25c0ec406d0ec61ede) |
+v0.2.0 在 NVIDIA GeForce RTX 2080 Ti、Python 3.11 和 CUDA 12.6 环境中完成了以下检查：
 
-v0.1.0 的性能与误差数据保留在[历史测试记录](docs/BENCHMARKS.md)中，不能用来代表 v0.2.0。新版同时更换了上游参考版本和默认线性求解器，比较结果时应使用对应版本的参考实现。升级方法见[迁移说明](docs/MIGRATION.md)。
+| 检查项 | 结果 |
+| --- | --- |
+| 测试套件 | **57 项通过**，包含 8 项 CUDA 测试 |
+| 安装后的命令 | 完成完整 fsaverage 模板的球面生成，并将生成球面传入后续配准 |
+| 输入网格 | 每个输入 163,842 个顶点、327,680 个三角面 |
+| 输出检查 | 坐标均为有限值，三角面数组保持不变 |
 
-## 安装
+这些检查确认了发布包可以完成相应流程，本次不据此给出新版加速比。详情见 [v0.2.0 版本说明](docs/RELEASE_v0.2.0.md)和[验证记录](docs/validation-v0.2.0.json)。
 
-需要 Python 3.11 或更新版本，以及与 CuPy 匹配的 NVIDIA 驱动。当前测试平台为 Linux。`cuda` 可选依赖安装面向 CUDA 12.x 的 `cupy-cuda12x`；使用其他 CUDA 环境时，请安装对应的 CuPy 包。
+以下是 **v0.1.0** 的历史数据，该版使用 PyTorch/Triton 和 CPU 辅助程序：
 
-从源码安装：
+| 组件 | v0.1.0 输入与参数 | CPU 参考程序 | GPU | 加速比 |
+| --- | --- | ---: | ---: | ---: |
+| `CAT_Surf2Sphere` | LH，61,442 点，`stop_at=10` | 54.84 s | 10.8119 s | 5.07x |
+| `CAT_SurfWarp` | LH，`steps=2`、`runs=2`、`avg` | 119.9142 s | 45.0848 s | 2.66x |
+| `CAT_SurfWarp` | RH，参数同上 | 119.4056 s | 46.9862 s | 2.54x |
+
+同一环境下，v0.1.0 双半球 CAT 配准流程实测为 **55.2573 秒**，不包含完整 CHARM 流程。硬件、参数、计时范围和误差数据保留在 [BENCHMARKS.md](docs/BENCHMARKS.md) 中；这些数字不能用来代表 v0.2.0。
+
+## 🧩 环境要求
+
+- Linux x86-64，为当前测试平台
+- NVIDIA GPU，以及与所安装 CuPy 包兼容的驱动
+- Python 3.11 或更新版本
+- NumPy、SciPy、Numba 和 nibabel
+- 完整 CUDA 流程所需的 CuPy
+
+`cuda` 可选依赖安装面向 CUDA 12.x 的 `cupy-cuda12x`；其他 CUDA 环境需安装对应的 CuPy 包。wheel 使用 `py3-none-any` 标记，表示本项目没有随包编译扩展，GPU 计算仍需满足以上运行条件。
+
+<a id="install"></a>
+
+## 🐍 Conda 环境安装
+
+克隆仓库，在项目内设置缓存目录，再创建环境：
 
 ```bash
 git clone https://github.com/ayakacxy/cat-surface-gpu.git
 cd cat-surface-gpu
 git checkout v0.2.0
 
-mkdir -p .work/setup/{tmp,cache/pip,cache/numba,cache/cupy}
+mkdir -p .work/setup/{tmp,cache/pip,cache/conda,cache/numba,cache/cupy}
 export TMPDIR="$PWD/.work/setup/tmp" TMP="$PWD/.work/setup/tmp" TEMP="$PWD/.work/setup/tmp"
 export XDG_CACHE_HOME="$PWD/.work/setup/cache"
 export PIP_CACHE_DIR="$PWD/.work/setup/cache/pip"
+export CONDA_PKGS_DIRS="$PWD/.work/setup/cache/conda"
 export NUMBA_CACHE_DIR="$PWD/.work/setup/cache/numba"
 export CUPY_CACHE_DIR="$PWD/.work/setup/cache/cupy"
 
-python -m pip install '.[cuda]'
-python -c 'import cupy; print(cupy.cuda.runtime.getDeviceCount())'
+conda env create -f environment.yml --prefix "$PWD/.work/setup/env"
+conda activate "$PWD/.work/setup/env"
+python -m pip install '.[cuda,test]'
 ```
 
-仓库也提供 Conda 用户可用的[环境文件](environment.yml)。wheel 和源码包的构建方法见[构建说明](docs/BUILDING.md)。
+已有 Python 环境时可以直接使用相同的 `pip` 命令安装。wheel 和源码包的构建方法见 [BUILDING.md](docs/BUILDING.md)。
 
-## 运行
+检查环境并运行测试：
 
-输入和输出均为 GIFTI 曲面。每个解剖曲面及其对应球面必须具有相同的顶点顺序和三角面；个体与模板之间可以采用不同网格。个体与模板文件需自行提供。
+```bash
+python - <<'PY'
+import cupy
+
+print("CuPy:", cupy.__version__)
+print("CUDA runtime:", cupy.cuda.runtime.runtimeGetVersion())
+print("CUDA devices:", cupy.cuda.runtime.getDeviceCount())
+PY
+
+python -m pytest -q --basetemp .work/setup/tmp/pytest
+```
+
+没有 GPU 时可以运行 CPU 测试，CUDA 测试会跳过；跳过不表示 GPU 结果已经验证。
+
+<a id="run"></a>
+
+## 🌐 运行 `CAT_Surf2Sphere`
+
+输入和输出均为 GIFTI 曲面。输入应为适合球面映射的闭合三角网格，个体与模板文件需自行提供。
 
 先在项目内设置工作目录和计算内核缓存目录：
 
@@ -68,10 +122,16 @@ export CUPY_CACHE_DIR="$PWD/.work/example/cache/cupy"
 cat-surf2sphere-gpu \
   --input-surface /path/to/white.gii \
   --output-surface .work/example/output/sphere.gii \
-  --stop-at 10 --device cuda --threads 8
+  --stop-at 10 \
+  --device cuda \
+  --threads 8
 ```
 
-配准到模板：
+默认 `stop_at=10` 保留 4,999 次面积平滑。程序会显示阶段进度，首次运行还包括内核编译时间。
+
+## 🧭 运行 `CAT_SurfWarp`
+
+将球面配准到模板：
 
 ```bash
 cat-surfwarp-gpu \
@@ -80,14 +140,37 @@ cat-surfwarp-gpu \
   --target-surface /path/to/template.white.gii \
   --target-sphere /path/to/template.sphere.gii \
   --output .work/example/output/sphere.reg.gii \
-  --steps 2 --runs 2 --average \
-  --solver-backend pcg --solver-iterations 40 \
-  --device cuda --threads 8
+  --steps 2 \
+  --runs 2 \
+  --average \
+  --solver-backend pcg \
+  --solver-iterations 40 \
+  --device cuda \
+  --threads 8
 ```
 
-命令会显示阶段进度。CUDA 不可用时直接报错，首次运行还包括内核编译时间。完整参数见 `--help`；支持范围和与 CAT-Surface 的数值差异见[实现说明](docs/IMPLEMENTATION.md)。
+每个解剖曲面及其对应球面必须具有相同的顶点顺序和三角面；个体与模板之间可以采用不同网格。两个命令在 CUDA 不可用时均直接报错，完整参数见 `--help`。
 
-## Python 接口
+## 📦 Python 软件包
+
+| 版本 | 实现方式 | CAT-Surface 参考版本 |
+| --- | --- | --- |
+| [v0.2.0](docs/RELEASE_v0.2.0.md) | Python、NumPy/Numba 和 CuPy，不附带 CAT 可执行文件 | [`b0c2aa23`](https://github.com/ChristianGaser/CAT-Surface/tree/b0c2aa2395ea4957a331b9444fb54c7716b6572d) |
+| [v0.1.0](docs/RELEASE_v0.1.0.md) | PyTorch/Triton，配合随包发布的 CPU 参考程序和辅助程序 | [`628b6851`](https://github.com/ChristianGaser/CAT-Surface/tree/628b6851d8638f3ab773cd25c0ec406d0ec61ede) |
+
+v0.2.0 wheel 包含 Python 实现和内嵌 CUDA 内核源码，不包含解剖数据或模板。发行文件另提供项目源码包、固定版本的 CAT-Surface 源码包、依赖清单和校验文件。
+
+两个主要命令名称保留，后端选项和 Python 接口已有调整。从 v0.1.0 升级时请参考[迁移说明](docs/MIGRATION.md)。
+
+## 🎯 数值检查与 Python 接口
+
+- 三角面数组保留源网格的索引。
+- 默认配准使用双精度 DARTEL，每次线性求解执行 40 次 PCG 迭代。
+- PCG 与上游 FMG 的计算过程不同，比较结果时需记录求解器和参考版本。
+- 当前配准支持使用 type-5 特征的一步或两步流程，具体设置见[实现说明](docs/IMPLEMENTATION.md)。
+- v0.1.0 使用的误差阈值不能直接套用到 v0.2.0。
+
+安装后的公共 Python 命名空间仍为 `cat_surface_gpu`：
 
 ```python
 from cat_surface_gpu import (
@@ -108,14 +191,40 @@ save_gifti_surface(
 )
 ```
 
-配准接口为 `SurfWarpParameters` 和 `surfwarp_cupy`，完整示例见[实现说明](docs/IMPLEMENTATION.md)。
+配准接口为 `SurfWarpParameters` 和 `surfwarp_cupy`，完整调用示例及输入要求见[实现说明](docs/IMPLEMENTATION.md)。
 
-## 测试与开发
+## 🗂️ 仓库结构
 
-仓库提供合成曲面和 CPU/CUDA 测试。跳过 CUDA 测试不能证明 GPU 结果正确。比较数值时需使用相同输入、参数和上游版本，逐项检查三角面，并报告顶点坐标差异。具体方法见[复现说明](docs/REPRODUCIBILITY.md)和[贡献指南](docs/CONTRIBUTING.md)。
+```text
+src/cat_surface_gpu/          Python 接口、命令、几何计算和 CUDA 内核
+tools/                        合成 GIFTI 测试数据生成器
+scripts/                      构建与发行检查工具
+tests/                        CPU 和 CUDA 测试
+upstream/                     源码记录与上游许可
+docs/                         使用说明、验证、性能记录与版本说明
+```
 
-## 致谢和许可证
+## 🧪 合成测试数据
 
-本版移植自 FlashCHARM 的 CAT 模块，基于 Christian Gaser 开发的 [CAT-Surface](https://github.com/ChristianGaser/CAT-Surface) 及 [SimNIBS](https://github.com/simnibs/simnibs) 使用的曲面配准流程。DARTEL 源于 John Ashburner 的工作。
+仓库不发布个体解剖数据。可以生成可复现、不含解剖信息的 GIFTI 文件，用于文件读写和安装检查：
 
-本项目代码采用 [GPL-3.0-or-later](LICENSE)，上游组件保留各自许可和版权说明。来源、固定版本及致谢见[第三方说明](THIRD_PARTY_NOTICES.md)。
+```bash
+python tools/generate_synthetic_fixture.py --output .work/example/smoke
+python scripts/verify_release.py
+```
+
+该小型数据用于结构检查，不能证明解剖配准精度，也不能替代 v0.2.0 已记录的完整 fsaverage 流程检查。
+
+## 🛠️ 开发与发行检查
+
+- [BUILDING.md](docs/BUILDING.md)：wheel、源码包和发行文件的构建方法。
+- [REPRODUCIBILITY.md](docs/REPRODUCIBILITY.md)：数值比较与计时方法。
+- [CONTRIBUTING.md](docs/CONTRIBUTING.md)：开发要求与验证记录。
+- [SECURITY.md](docs/SECURITY.md)：漏洞报告方式。
+- [CHANGELOG.md](docs/CHANGELOG.md)：各版本的主要变化。
+
+## 🙏 上游致谢和许可证
+
+本项目基于 Christian Gaser 开发的 [CAT-Surface](https://github.com/ChristianGaser/CAT-Surface) 及 [SimNIBS](https://github.com/simnibs/simnibs) 使用的 CAT 曲面配准流程。DARTEL 源于 John Ashburner 的工作，具体来源、固定版本和致谢见[第三方说明](THIRD_PARTY_NOTICES.md)。
+
+本项目代码采用 [GPL-3.0-or-later](LICENSE)，上游组件保留各自许可和版权说明。

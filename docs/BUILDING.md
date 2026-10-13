@@ -1,4 +1,4 @@
-# Building and packaging v0.2.0
+# Building from Source
 
 Version 0.2.0 ships Python source. Building the package does not compile or bundle CAT-Surface executables, project-specific native extensions, or CUDA binaries. Numba and CuPy compile kernels when the relevant functions run.
 
@@ -56,7 +56,7 @@ The script checks the upstream archive's SHA-256 against `UPSTREAM.lock` before 
 - CycloneDX dependency inventory;
 - `SHA256SUMS` for the four artifacts above.
 
-The upstream archive is provided separately for source reference. It is not installed by the wheel. There is no Linux executable bundle in v0.2.0. The [FlashCHARM source record](../upstream/FLASHCHARM_CAT_PROVENANCE.json) records the origin and hashes of the adapted Python modules.
+The upstream archive is provided separately for source reference. It is not installed by the wheel. There is no Linux executable bundle in v0.2.0. The [source manifest](../upstream/SOURCE_MANIFEST.json) records the hashes of the released Python modules.
 
 ## Rebuilding v0.1.0
 

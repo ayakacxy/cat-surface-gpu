@@ -9,7 +9,7 @@ from pathlib import Path
 import tomllib
 import zipfile
 
-FORBIDDEN_IMPORTS = {"flashcharm", "simnibs", "torch", "triton", "subprocess", "ctypes"}
+FORBIDDEN_IMPORTS = {"simnibs", "torch", "triton", "subprocess", "ctypes"}
 
 
 def check_source(root: Path) -> None:

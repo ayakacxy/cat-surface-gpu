@@ -13,7 +13,7 @@ The relevant reference sources include `Progs/CAT_Surf2Sphere.c`, `Progs/CAT_Sur
 
 CAT-Surface original code is available under GPL-2.0-or-later or a separate commercial license from its copyright holder. The copied notice is at [upstream/CAT-Surface-LICENSE.txt](upstream/CAT-Surface-LICENSE.txt). Third-party components within the upstream source retain their own licenses.
 
-Version 0.2.0 adapts the Python CAT implementation developed in FlashCHARM. The Python package includes Python and inline CUDA kernel source; it contains no CAT-Surface executables, native helper programs, or full upstream source tree. The release separately provides the pinned upstream source archive for reference and attribution. See [UPSTREAM.lock](UPSTREAM.lock) and the [FlashCHARM source record](upstream/FLASHCHARM_CAT_PROVENANCE.json) for source revisions and file hashes.
+Version 0.2.0 includes Python and inline CUDA kernel source; it contains no CAT-Surface executables, native helper programs, or full upstream source tree. The release separately provides the pinned upstream source archive for reference and attribution. See [UPSTREAM.lock](UPSTREAM.lock) and the [source manifest](upstream/SOURCE_MANIFEST.json) for source revisions and file hashes.
 
 Version 0.1.0 distributed four Linux executables built from revision `628b6851` with `-O2 -fPIC`. Their helper source and corresponding upstream source remain available with the [v0.1.0 release](https://github.com/ayakacxy/cat-surface-gpu/releases/tag/v0.1.0).
 

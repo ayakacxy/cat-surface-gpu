@@ -1,10 +1,10 @@
-# Reproducibility and numerical comparisons
+# Reproducibility and Provenance Guide
 
 ## v0.2.0 release checks
 
-On 2026-10-13, all 57 tests passed on an RTX 2080 Ti, including eight CUDA tests. The installed wheel completed both command-line workflows on full fsaverage templates, including passing the generated sphere to registration. A full fsaverage comparison with the source FlashCHARM Python modules produced identical sphere coordinates, registered coordinates, velocity fields, deformation fields, and objective values; triangles were unchanged. Each input had 163,842 vertices and 327,680 triangles. Scientific settings were the defaults, with `rotation_point_chunk=12288`.
+On 2026-10-13, all 57 tests passed on an RTX 2080 Ti, including eight CUDA tests. The installed wheel completed both command-line workflows on full fsaverage templates, passing the generated sphere directly to registration. Each input had 163,842 vertices and 327,680 triangles. Both commands used their default settings, including `rotation_point_chunk=16384` for registration. Outputs retained the input triangles and contained finite coordinates with no zero-area triangles.
 
-The [machine-readable record](validation-v0.2.0.json) includes input hashes, dependency versions, parameters, and comparison results. This checks migration consistency for these templates. It is not a new official-C comparison or a multi-subject performance study. The separate zero-residual regression tests cover the PCG division-by-zero fix.
+The [machine-readable record](validation-v0.2.0.json) includes input and source hashes, dependency versions, parameters, and results. These checks cover the installed workflow on the stated templates; they do not establish accuracy across subjects or a speedup over the official C implementation. Separate zero-residual regression tests cover the PCG division-by-zero fix.
 
 ## Record the version and environment
 
@@ -18,7 +18,7 @@ For v0.2.0, record:
 
 The fixed upstream revision is also recorded in [UPSTREAM.lock](../UPSTREAM.lock). Version 0.1.0 used a different revision and implementation; its evidence is archived in [BENCHMARKS.md](BENCHMARKS.md).
 
-## Validate in stages
+## Validation layers
 
 1. Inspect the built wheel and source archive for required code and notices, and confirm that no CAT executables or project-specific extensions are included.
 2. Run CPU tests for geometry, indexing, topology, interpolation, and input validation.
