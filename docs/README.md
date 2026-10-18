@@ -2,14 +2,16 @@
 
 [English](README.md) · [简体中文](README.zh-CN.md)
 
-This directory contains the detailed project, validation, and community documentation.
+This directory contains usage, testing, development and community documentation in English and Simplified Chinese.
+
+- v0.3.0 platforms, installation and performance: [English](RELEASE_v0.3.0.md) · [简体中文](RELEASE_v0.3.0.zh-CN.md)
 
 - Implementation and Python API: [English](IMPLEMENTATION.md) · [简体中文](IMPLEMENTATION.zh-CN.md)
 - Performance and output comparisons — v0.2.0: [English](BENCHMARKS_v0.2.0.md) · [简体中文](BENCHMARKS_v0.2.0.zh-CN.md)
 - Performance and accuracy benchmarks — v0.1.0: [English](BENCHMARKS.md) · [简体中文](BENCHMARKS.zh-CN.md)
 - Building and packaging: [English](BUILDING.md) · [简体中文](BUILDING.zh-CN.md)
 - Reproducibility and numerical comparisons: [English](REPRODUCIBILITY.md) · [简体中文](REPRODUCIBILITY.zh-CN.md)
-- Migrating from v0.1.0: [English](MIGRATION.md) · [简体中文](MIGRATION.zh-CN.md)
+- Version migration guide: [English](MIGRATION.md) · [简体中文](MIGRATION.zh-CN.md)
 - v0.2.0 release notes: [English](RELEASE_v0.2.0.md) · [简体中文](RELEASE_v0.2.0.zh-CN.md)
 - v0.1.0 release notes: [English](RELEASE_v0.1.0.md) · [简体中文](RELEASE_v0.1.0.zh-CN.md)
 - Contribution guide: [English](CONTRIBUTING.md) · [简体中文](CONTRIBUTING.zh-CN.md)

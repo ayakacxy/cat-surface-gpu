@@ -1,4 +1,4 @@
-"""从三角形构建 CAT 球面算法复用的拓扑表。"""
+"从三角形构建 CAT 球面算法复用的拓扑表。"
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from numba import njit
 
 @dataclass(frozen=True)
 class SurfaceTopology:
-    """保存邻点环、入射面和无相邻顶点的颜色分组。"""
+    "保存邻点环、入射面和无相邻顶点的颜色分组。"
 
     neighbours: np.ndarray
     neighbour_mask: np.ndarray
@@ -20,7 +20,7 @@ class SurfaceTopology:
 
     @property
     def degree(self) -> np.ndarray:
-        """返回每个顶点的邻点数。"""
+        "返回每个顶点的邻点数。"
 
         return self.neighbour_mask.sum(axis=1, dtype=np.int32)
 
@@ -28,20 +28,22 @@ class SurfaceTopology:
 def _cyclic_neighbours(
     faces: np.ndarray, incident: list[list[int]], vertex: int
 ) -> list[int]:
-    """利用入射三角形在局部邻点图中恢复闭合环。"""
+    "利用入射三角形在局部邻点图中恢复闭合环。"
 
     graph: dict[int, set[int]] = {}
     for face_index in incident[vertex]:
         face = faces[face_index]
         pair = [int(item) for item in face if int(item) != vertex]
         if len(pair) != 2:
-            raise ValueError(f"顶点 {vertex} 所在三角形退化")
+            raise ValueError(f"Degenerate triangle incident to vertex {vertex}")
         graph.setdefault(pair[0], set()).add(pair[1])
         graph.setdefault(pair[1], set()).add(pair[0])
     if not graph:
         return []
     if any(len(adjacent) != 2 for adjacent in graph.values()):
-        raise ValueError(f"顶点 {vertex} 的邻域不是闭合二维流形")
+        raise ValueError(
+            f"Vertex {vertex} neighborhood is not a closed two-dimensional manifold"
+        )
     first = min(graph)
     second = min(graph[first])
     ring = [first, second]
@@ -49,21 +51,21 @@ def _cyclic_neighbours(
     while len(ring) < len(graph):
         candidates = graph[current] - {previous}
         if len(candidates) != 1:
-            raise ValueError(f"顶点 {vertex} 的邻点环存在歧义")
+            raise ValueError(f"Ambiguous neighbor ring at vertex {vertex}")
         following = next(iter(candidates))
         if following == first:
             break
         if following in ring:
-            raise ValueError(f"顶点 {vertex} 的邻点环提前闭合")
+            raise ValueError(f"Neighbor ring closes prematurely at vertex {vertex}")
         ring.append(following)
         previous, current = current, following
     if len(ring) != len(graph) or first not in graph[ring[-1]]:
-        raise ValueError(f"顶点 {vertex} 的邻点环不闭合")
+        raise ValueError(f"Neighbor ring is not closed at vertex {vertex}")
     return ring
 
 
 def _color_groups(neighbours: np.ndarray, mask: np.ndarray) -> tuple[np.ndarray, ...]:
-    """贪心构建顶点独立集，供单次 CUDA 原地更新安全并行。"""
+    "贪心构建顶点独立集，供单次 CUDA 原地更新安全并行。"
 
     colors = _greedy_colors_numba(neighbours, mask)
     return tuple(
@@ -74,7 +76,7 @@ def _color_groups(neighbours: np.ndarray, mask: np.ndarray) -> tuple[np.ndarray,
 
 @njit(cache=True, nogil=True)
 def _greedy_colors_numba(neighbours: np.ndarray, mask: np.ndarray) -> np.ndarray:
-    """以稳定的顶点顺序执行独立集着色。"""
+    "以稳定的顶点顺序执行独立集着色。"
 
     count, width = neighbours.shape
     colors = np.full(count, -1, dtype=np.int32)
@@ -105,7 +107,7 @@ def _build_cyclic_neighbours_numba(
     output_width: int,
     adjacency_width: int,
 ) -> tuple[np.ndarray, np.ndarray, bool]:
-    """用定宽表重建闭合三角网格的稳定邻点环。"""
+    "用定宽表重建闭合三角网格的稳定邻点环。"
 
     count = incident_faces.shape[0]
     neighbours = np.zeros((count, output_width), dtype=np.int32)
@@ -237,26 +239,26 @@ def build_surface_topology(
     faces: np.ndarray,
     n_vertices: int | None = None,
 ) -> SurfaceTopology:
-    """验证闭合三角网格并生成稳定的稠密拓扑表。"""
+    "验证闭合三角网格并生成稳定的稠密拓扑表。"
 
     triangles = np.ascontiguousarray(faces, dtype=np.int64)
     if triangles.ndim != 2 or triangles.shape[1] != 3:
-        raise ValueError("三角形数组必须是 (M, 3)")
+        raise ValueError("Triangles must have shape (M, 3)")
     if triangles.size == 0:
-        raise ValueError("三角形数组不能为空")
+        raise ValueError("Triangle array must not be empty")
     inferred_vertices = int(triangles.max()) + 1
     count = inferred_vertices if n_vertices is None else int(n_vertices)
     if count < inferred_vertices or triangles.min() < 0:
-        raise ValueError("三角形索引超出顶点范围")
+        raise ValueError("Triangle index is outside the vertex range")
     if np.any(
         (triangles[:, 0] == triangles[:, 1])
         | (triangles[:, 1] == triangles[:, 2])
         | (triangles[:, 2] == triangles[:, 0])
     ):
-        raise ValueError("网格包含退化三角形索引")
+        raise ValueError("Mesh contains degenerate triangle indices")
 
-    # 先用稳定的 CSR 风格入射表和 Numba 环遍历；非法/非闭合网格回退到
-    # 原始 Python 校验路径，以保留详细错误语义。
+    # 优先使用稳定 CSR 关联表与 Numba 邻环遍历；无效或非闭合网格
+    # 交由原 Python 校验路径处理，以保留详细错误信息。
     flat_vertices = np.ascontiguousarray(triangles.ravel(), dtype=np.int32)
     flat_faces = np.repeat(np.arange(triangles.shape[0], dtype=np.int32), 3)
     order = np.argsort(flat_vertices, kind="stable")
@@ -290,7 +292,7 @@ def build_surface_topology(
         for vertex in face:
             incident[int(vertex)].append(face_index)
     if any(not items for items in incident):
-        raise ValueError("网格包含孤立顶点")
+        raise ValueError("Mesh contains isolated vertices")
 
     rings = [_cyclic_neighbours(triangles, incident, vertex) for vertex in range(count)]
     max_degree = max(map(len, rings))

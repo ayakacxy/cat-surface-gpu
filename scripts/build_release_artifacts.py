@@ -26,12 +26,12 @@ def main() -> int:
     """只处理指定版本的发布文件，不混入旧版或本地临时内容。"""
     parser = argparse.ArgumentParser()
     parser.add_argument("--upstream-archive", type=Path, required=True)
-    parser.add_argument("--dist", type=Path, default=Path("dist/0.2.0"))
+    parser.add_argument("--dist", type=Path)
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
-    dist = args.dist.resolve()
     project = tomllib.loads((root / "pyproject.toml").read_text())["project"]
     version = project["version"]
+    dist = (args.dist or root / "dist" / version).resolve()
     lock = dict(
         line.split("=", 1)
         for line in (root / "UPSTREAM.lock").read_text().splitlines()

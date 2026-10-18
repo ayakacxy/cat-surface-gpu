@@ -15,16 +15,17 @@ import numpy as np
 from . import __version__
 from .io import GiftiSurface, load_gifti_surface, save_gifti_surface
 from .parameters import Surf2SphereParameters, SurfWarpParameters
-from .surf2sphere import surf_to_sphere_cupy
+from .surf2sphere import surf_to_sphere_cupy, surf_to_sphere
+from .runtime import resolve_device, host_device_context
 from .surfwarp import surfwarp_cupy
-from .topology import build_surface_topology
+from .templates import fixed_surface_topology
 
 
 def _common_options(parser: argparse.ArgumentParser) -> None:
     """添加两个入口共用的运行选项。"""
 
     parser.add_argument(
-        "--device", default="cuda", help="CUDA device, e.g. cuda or cuda:1"
+        "--device", default="cuda", help="Device: auto, cpu, metal, cuda or cuda:N"
     )
     parser.add_argument(
         "--threads", type=int, default=8, help="Numba CPU threads (1-8)"
@@ -89,7 +90,7 @@ def _paired_surfaces(surface_path: Path, sphere_path: Path, name: str):
         raise ValueError(f"{name} 表面和球面的顶点数量不一致")
     if not np.array_equal(surface.faces, sphere.faces):
         raise ValueError(f"{name} 表面和球面的三角形编号或顺序不一致")
-    build_surface_topology(surface.faces, len(surface.vertices))
+    fixed_surface_topology(surface.faces, len(surface.vertices))
     return surface, sphere
 
 
@@ -115,13 +116,24 @@ def surf2sphere_main(argv: list[str] | None = None) -> int:
         progress = _setup(args, (args.input_surface,), args.output_surface)
         progress("Reading surface and checking topology")
         surface = load_gifti_surface(args.input_surface)
-        topology = build_surface_topology(surface.faces, len(surface.vertices))
-        with _cuda_device(args.device):
-            vertices, timings = surf_to_sphere_cupy(
+        topology = fixed_surface_topology(surface.faces, len(surface.vertices))
+        args.device = resolve_device(args.device)
+        context = (
+            _cuda_device(args.device)
+            if args.device.startswith("cuda")
+            else host_device_context(args.device)
+        )
+        compute = (
+            surf_to_sphere_cupy if args.device.startswith("cuda") else surf_to_sphere
+        )
+        options = {} if args.device.startswith("cuda") else {"device": args.device}
+        with context:
+            vertices, timings = compute(
                 surface.vertices,
                 surface.faces,
                 parameters,
                 topology,
+                **options,
                 progress=progress,
             )
         save_gifti_surface(
@@ -243,7 +255,14 @@ def surfwarp_main(argv: list[str] | None = None) -> int:
         target, target_sphere = _paired_surfaces(
             args.target_surface, args.target_sphere, "target"
         )
-        with _cuda_device(args.device):
+        args.device = resolve_device(args.device)
+        context = (
+            _cuda_device(args.device)
+            if args.device.startswith("cuda")
+            else host_device_context(args.device)
+        )
+        options = {} if args.device.startswith("cuda") else {"backend": args.device}
+        with context:
             result = surfwarp_cupy(
                 source.vertices,
                 source_sphere.vertices,
@@ -252,6 +271,7 @@ def surfwarp_main(argv: list[str] | None = None) -> int:
                 target_sphere.vertices,
                 target.faces,
                 parameters,
+                **options,
                 solver_iterations=args.solver_iterations,
                 solver_backend=args.solver_backend,
                 rotation_point_chunk=args.rotation_point_chunk,

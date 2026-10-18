@@ -14,4 +14,4 @@ Include the affected version, environment, reproduction steps, impact, and any p
 
 ## Scope
 
-The package reads GIFTI surfaces and uses NumPy, Numba, nibabel, and CuPy to process them. Version 0.2.0 does not bundle CAT executables. The project does not collect telemetry or upload input data.
+The package reads GIFTI surfaces with nibabel and processes them using NumPy/Numba, CuPy CUDA or MLX Metal. Versions 0.2.0 and 0.3.0 do not bundle CAT executables. The project does not collect telemetry or upload input data.

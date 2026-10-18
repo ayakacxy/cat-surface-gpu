@@ -1,14 +1,4 @@
-"""官方 CAT 初始刚体旋转的独立 CuPy 实现。
-
-这里保留当前 CAT-Surface 的三个关键约定：
-
-* 使用 ``rotation_to_matrix`` 的 X/Y/Z 欧拉角和矩阵布局；
-* 用目标球面三角形上的最近点重心插值计算代价；
-* 先执行 46 个固定 seed，再按 C 版本顺序执行 Nelder--Mead。
-
-目标球面的空间索引只构建一次，之后所有角度候选都在 GPU 上批量定位，
-避免为每个 Nelder--Mead 点重新建立 KD-tree 或三角形索引。
-"""
+"官方 CAT 初始刚体旋转的独立 CuPy 实现。\n\n这里保留当前 CAT-Surface 的三个关键约定：\n\n* 使用 ``rotation_to_matrix`` 的 X/Y/Z 欧拉角和矩阵布局；\n* 用目标球面三角形上的最近点重心插值计算代价；\n* 先执行 46 个固定 seed，再按 C 版本顺序执行 Nelder--Mead。\n\n目标球面的空间索引只构建一次，之后所有角度候选都在 GPU 上批量定位，\n避免为每个 Nelder--Mead 点重新建立 KD-tree 或三角形索引。"
 
 from __future__ import annotations
 
@@ -16,11 +6,167 @@ from dataclasses import dataclass
 import math
 
 import numpy as np
-from numba import njit
+from numba import njit, prange
+
+
+@njit(cache=True, inline="always")
+def _segment_closest_cpu(qx, qy, qz, ax, ay, az, bx, by, bz):
+    "按原始端点截断规则寻找线段最近点。"
+
+    dx, dy, dz = bx - ax, by - ay, bz - az
+    ox, oy, oz = qx - ax, qy - ay, qz - az
+    denominator = dx * dx + dy * dy + dz * dz
+    fraction = (
+        (ox * dx + oy * dy + oz * dz) / denominator if denominator != 0.0 else 0.0
+    )
+    fraction = min(1.0, max(0.0, fraction))
+    px, py, pz = ax + fraction * dx, ay + fraction * dy, az + fraction * dz
+    rx, ry, rz = qx - px, qy - py, qz - pz
+    return rx * rx + ry * ry + rz * rz, px, py, pz
+
+
+@njit(cache=True, parallel=True, fastmath=False)
+def _rotation_costs_cpu_fused(
+    rotated,
+    source_values,
+    target_face_values,
+    triangles,
+    edge_a,
+    edge_b,
+    normals,
+    normal_sq,
+    face_xx,
+    face_xy,
+    face_yy,
+    offsets,
+    candidate_faces,
+    scale,
+    grid_size,
+):
+    "逐点搜索候选面，融合投影、最近边与重心插值。"
+
+    count_angles, count_points = rotated.shape[:2]
+    errors = np.empty((count_angles, count_points), dtype=np.float64)
+    for item in prange(count_angles * count_points):
+        angle_index = item // count_points
+        point_index = item % count_points
+        qx = rotated[angle_index, point_index, 0]
+        qy = rotated[angle_index, point_index, 1]
+        qz = rotated[angle_index, point_index, 2]
+        ix = int(np.floor((qx / scale + 1.0) * (grid_size / 2.0)))
+        iy = int(np.floor((qy / scale + 1.0) * (grid_size / 2.0)))
+        iz = int(np.floor((qz / scale + 1.0) * (grid_size / 2.0)))
+        ix = min(grid_size - 1, max(0, ix))
+        iy = min(grid_size - 1, max(0, iy))
+        iz = min(grid_size - 1, max(0, iz))
+        cell = ix + grid_size * (iy + grid_size * iz)
+        best_distance = np.inf
+        best_face = -1
+        best_x = 0.0
+        best_y = 0.0
+        best_z = 0.0
+        start = offsets[cell]
+        stop = offsets[cell + 1]
+        if start == stop:
+            stop = start + 1
+        for position in range(start, stop):
+            face = candidate_faces[min(position, candidate_faces.size - 1)]
+            ax, ay, az = (
+                triangles[face, 0, 0],
+                triangles[face, 0, 1],
+                triangles[face, 0, 2],
+            )
+            bx, by, bz = (
+                triangles[face, 1, 0],
+                triangles[face, 1, 1],
+                triangles[face, 1, 2],
+            )
+            cx, cy, cz = (
+                triangles[face, 2, 0],
+                triangles[face, 2, 1],
+                triangles[face, 2, 2],
+            )
+            nx, ny, nz = normals[face, 0], normals[face, 1], normals[face, 2]
+            n2 = normal_sq[face]
+            plane_t = (
+                ((ax - qx) * nx + (ay - qy) * ny + (az - qz) * nz) / n2
+                if n2 > 0.0
+                else 0.0
+            )
+            px, py, pz = qx + plane_t * nx, qy + plane_t * ny, qz + plane_t * nz
+            ex, ey, ez = px - ax, py - ay, pz - az
+            vx = edge_a[face, 0] * ex + edge_a[face, 1] * ey + edge_a[face, 2] * ez
+            vy = edge_b[face, 0] * ex + edge_b[face, 1] * ey + edge_b[face, 2] * ez
+            xx, xy, yy = face_xx[face], face_xy[face], face_yy[face]
+            denominator = xx * yy - xy * xy
+            xweight = (vx * yy - vy * xy) / denominator if denominator != 0.0 else 0.0
+            yweight = (vy * xx - vx * xy) / denominator if denominator != 0.0 else 0.0
+            inside = (
+                denominator != 0.0
+                and -1.0e-3 <= xweight <= 1.0 + 1.0e-3
+                and -1.0e-3 <= yweight <= 1.0 + 1.0e-3
+                and -1.0e-3 <= xweight + yweight <= 1.0 + 1.0e-3
+            )
+            if inside:
+                distance = plane_t * plane_t * n2
+            else:
+                da = (qx - ax) ** 2 + (qy - ay) ** 2 + (qz - az) ** 2
+                db = (qx - bx) ** 2 + (qy - by) ** 2 + (qz - bz) ** 2
+                dc = (qx - cx) ** 2 + (qy - cy) ** 2 + (qz - cz) ** 2
+                if da <= db and da <= dc:
+                    distance1, p1x, p1y, p1z = _segment_closest_cpu(
+                        qx, qy, qz, cx, cy, cz, ax, ay, az
+                    )
+                    distance2, p2x, p2y, p2z = _segment_closest_cpu(
+                        qx, qy, qz, ax, ay, az, bx, by, bz
+                    )
+                elif db <= dc:
+                    distance1, p1x, p1y, p1z = _segment_closest_cpu(
+                        qx, qy, qz, ax, ay, az, bx, by, bz
+                    )
+                    distance2, p2x, p2y, p2z = _segment_closest_cpu(
+                        qx, qy, qz, bx, by, bz, cx, cy, cz
+                    )
+                else:
+                    distance1, p1x, p1y, p1z = _segment_closest_cpu(
+                        qx, qy, qz, bx, by, bz, cx, cy, cz
+                    )
+                    distance2, p2x, p2y, p2z = _segment_closest_cpu(
+                        qx, qy, qz, cx, cy, cz, ax, ay, az
+                    )
+                if distance1 < distance2:
+                    distance, px, py, pz = distance1, p1x, p1y, p1z
+                else:
+                    distance, px, py, pz = distance2, p2x, p2y, p2z
+            if distance < best_distance:
+                best_distance = distance
+                best_face = face
+                best_x, best_y, best_z = px, py, pz
+        if best_face < 0:
+            errors[angle_index, point_index] = np.nan
+            continue
+        face = best_face
+        ax, ay, az = triangles[face, 0, 0], triangles[face, 0, 1], triangles[face, 0, 2]
+        v2x, v2y, v2z = best_x - ax, best_y - ay, best_z - az
+        d20 = v2x * edge_a[face, 0] + v2y * edge_a[face, 1] + v2z * edge_a[face, 2]
+        d21 = v2x * edge_b[face, 0] + v2y * edge_b[face, 1] + v2z * edge_b[face, 2]
+        d00, d01, d11 = face_xx[face], face_xy[face], face_yy[face]
+        denominator = d00 * d11 - d01 * d01
+        w1 = (d11 * d20 - d01 * d21) / denominator if denominator != 0.0 else 0.0
+        w2 = (d00 * d21 - d01 * d20) / denominator if denominator != 0.0 else 0.0
+        w0 = 1.0 - w1 - w2
+        sampled = (
+            target_face_values[face, 0] * w0
+            + target_face_values[face, 1] * w1
+            + target_face_values[face, 2] * w2
+        )
+        delta = source_values[point_index] - sampled
+        errors[angle_index, point_index] = delta * delta
+    return errors
 
 
 def official_rotation_seed_angles() -> np.ndarray:
-    """返回官方初始旋转搜索的 46 个 seed 角度。"""
+    "返回官方初始旋转搜索的 46 个 seed 角度。"
 
     seed0 = (-0.6, -0.3, 0.0, 0.3, 0.6)
     seed12 = (-0.3, 0.0, 0.3)
@@ -32,7 +178,7 @@ def official_rotation_seed_angles() -> np.ndarray:
 
 
 def rotation_matrix_from_angles(angles: np.ndarray) -> np.ndarray:
-    """按官方 ``rotation_to_matrix`` 生成一个行优先三乘三矩阵。"""
+    "按官方 ``rotation_to_matrix`` 生成一个行优先三乘三矩阵。"
 
     alpha, beta, gamma = np.asarray(angles, dtype=np.float64).reshape(3)
     rx = np.asarray(
@@ -77,8 +223,8 @@ def rotation_matrix_from_angles(angles: np.ndarray) -> np.ndarray:
         ),
         dtype=np.float64,
     )
-    # C 源码虽把常量写成行优先数组，却按 i+3*j 访问；这里逐项保留
-    # 该索引约定，随后 rotate_polygons 再按连续三元素读取。
+    # C 源码虽以行优先存储常量数组，但以 i+3*j 访问；保留此索引约定，
+    # 后续 rotate_polygons 按连续三个元素读取。
     first = np.empty((3, 3), dtype=np.float64)
     result = np.empty((3, 3), dtype=np.float64)
     for i in range(3):
@@ -93,7 +239,7 @@ def rotation_matrix_from_angles(angles: np.ndarray) -> np.ndarray:
 
 
 def rotate_vertices(vertices: np.ndarray, matrix: np.ndarray) -> np.ndarray:
-    """按 CAT 的行公式旋转顶点。"""
+    "按 CAT 的行公式旋转顶点。"
 
     points = np.asarray(vertices, dtype=np.float64)
     result = points @ np.asarray(matrix, dtype=np.float64).T
@@ -106,7 +252,7 @@ def _pack_grid_cells(
     upper: np.ndarray,
     grid_size: int,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """按原始面片/坐标循环顺序把面片压缩到空间网格。"""
+    "按原始面片/坐标循环顺序把面片压缩到空间网格。"
 
     cell_count = int(grid_size) ** 3
     counts = np.zeros(cell_count, dtype=np.int32)
@@ -141,7 +287,7 @@ def _pack_grid_cells(
 
 @dataclass
 class RotationGridIndex:
-    """目标球面三角形的固定空间索引。"""
+    "目标球面三角形的固定空间索引。"
 
     points: np.ndarray
     faces: np.ndarray
@@ -160,7 +306,7 @@ class RotationGridIndex:
         grid_size: int = 128,
         margin: int = 1,
     ) -> "RotationGridIndex":
-        """按目标三角形包围盒建立压缩网格索引。"""
+        "按目标三角形包围盒建立压缩网格索引。"
 
         if grid_size < 8 or margin < 0:
             raise ValueError("grid_size 必须不小于 8，margin 不能为负数")
@@ -198,7 +344,7 @@ class RotationGridIndex:
 
     @property
     def max_candidates(self) -> int:
-        """返回单个空间单元的最大候选面片数。"""
+        "返回单个空间单元的最大候选面片数。"
 
         return int(np.diff(self.offsets).max())
 
@@ -212,10 +358,18 @@ class RotationGridIndex:
         max_iter: int = 500,
         tol: float = 1.0e-4,
         refine: bool = True,
+        array_module=None,
+        cpu_fused: bool = True,
+        gpu_fused: bool = True,
+        cuda_costs: bool = False,
+        metal_costs: bool = False,
     ) -> "RotationSearchResult":
-        """在 GPU 上执行官方 seed 和 Nelder--Mead 搜索。"""
+        "在 GPU 上执行官方 seed 和 Nelder--Mead 搜索。"
 
-        import cupy as cp
+        if array_module is None:
+            import cupy as cp
+        else:
+            cp = array_module
 
         source = cp.asarray(np.asarray(source_points, dtype=np.float32))
         source_map = cp.asarray(np.asarray(source_values, dtype=np.float64))
@@ -231,9 +385,9 @@ class RotationGridIndex:
         target_faces = cp.asarray(self.faces, dtype=cp.int32)
         offsets = cp.asarray(self.offsets, dtype=cp.int32)
         candidate_faces = cp.asarray(self.candidate_faces, dtype=cp.int32)
-        # 目标面片几何与被试无关。原实现会在每次 Nelder--Mead 代价
-        # 评估中重复 gather、边向量和法向计算，这里在一次 search 内
-        # 预计算并复用；目标曲率值仍按被试输入动态 gather。
+        # 目标面几何与被试无关；原实现每次代价求值都重算索引、边向量和法向，
+        # 现改为一次 Nelder–Mead 搜索内预先计算并复用，
+        # 同时仍根据输入动态读取目标曲率。
         face_triangles = target_points[target_faces]
         face_first = face_triangles[:, 0, :]
         face_second = face_triangles[:, 1, :]
@@ -249,8 +403,36 @@ class RotationGridIndex:
         max_candidates = self.max_candidates
         scale = cp.asarray(self.scale, dtype=cp.float32)
 
+        cuda_evaluator = None
+        if cuda_costs or metal_costs:
+            if cuda_costs and metal_costs:
+                raise ValueError("Select only one GPU rotation backend")
+            if cp is not np:
+                raise ValueError("Resident CUDA rotation requires CPU search control")
+            if metal_costs:
+                from .backends.metal.rotation import RotationCosts
+            else:
+                from .backends.cuda.rotation_fp32 import RotationCosts
+            cuda_evaluator = RotationCosts(
+                source,
+                source_map,
+                target_face_values,
+                face_triangles,
+                face_edge_a,
+                face_edge_b,
+                face_normal,
+                face_normal_sq,
+                face_xx,
+                face_xy,
+                face_yy,
+                offsets,
+                candidate_faces,
+                self.scale,
+                self.grid_size,
+            )
+
         def matrices(angles: cp.ndarray) -> cp.ndarray:
-            """批量生成与官方数组布局一致的旋转矩阵。"""
+            "批量生成与官方数组布局一致的旋转矩阵。"
 
             alpha, beta, gamma = angles.T
             zero = cp.zeros_like(alpha)
@@ -297,7 +479,7 @@ class RotationGridIndex:
                 ),
                 axis=1,
             )
-            # C 源码按 i+3*j 访问这些数组；逐项乘法才能保持相同方向。
+            # C 源码以 i+3*j 访问数组；逐元素乘法保留相同方向。
             first = cp.empty_like(rx)
             result = cp.empty_like(rx)
             for row in range(3):
@@ -315,7 +497,7 @@ class RotationGridIndex:
             return result.reshape(-1, 3, 3)
 
         def locate(query: cp.ndarray) -> tuple[cp.ndarray, cp.ndarray]:
-            """定位 [候选数, 点数, 3] 查询并返回面片及重心权重。"""
+            "定位 [候选数, 点数, 3] 查询并返回面片及重心权重。"
 
             scaled = query / scale
             cell = cp.floor((scaled + 1.0) * (self.grid_size / 2.0)).astype(cp.int32)
@@ -450,14 +632,63 @@ class RotationGridIndex:
             return best_face, weights
 
         def costs(angles: cp.ndarray) -> cp.ndarray:
-            """批量计算若干角度的曲率平方误差。"""
+            "批量计算若干角度的曲率平方误差。"
 
             angle_value = cp.asarray(angles, dtype=cp.float64).reshape(-1, 3)
             matrices_value = matrices(angle_value)
+            if cuda_evaluator is not None:
+                return cuda_evaluator(matrices_value)
             rotated = cp.matmul(source[None, :, :], matrices_value.transpose(0, 2, 1))
+            if cp is np and cpu_fused:
+                errors = _rotation_costs_cpu_fused(
+                    np.ascontiguousarray(rotated),
+                    source_map,
+                    target_face_values,
+                    face_triangles,
+                    face_edge_a,
+                    face_edge_b,
+                    face_normal,
+                    face_normal_sq,
+                    face_xx,
+                    face_xy,
+                    face_yy,
+                    offsets,
+                    candidate_faces,
+                    float(self.scale),
+                    int(self.grid_size),
+                )
+                result = np.zeros(angle_value.shape[0], dtype=np.float64)
+                for start in range(0, source.shape[0], int(point_chunk)):
+                    stop = min(start + int(point_chunk), int(source.shape[0]))
+                    result += np.sum(errors[:, start:stop], axis=1)
+                return result
             result = cp.zeros(angle_value.shape[0], dtype=cp.float64)
             for start in range(0, source.shape[0], int(point_chunk)):
                 stop = min(start + int(point_chunk), int(source.shape[0]))
+                if cp is not np and gpu_fused:
+                    from cat_surface_gpu.backends.cuda.rotation import rotation_errors
+
+                    errors = rotation_errors(
+                        rotated,
+                        source_map,
+                        target_face_values,
+                        face_triangles,
+                        face_edge_a,
+                        face_edge_b,
+                        face_normal,
+                        face_normal_sq,
+                        face_xx,
+                        face_xy,
+                        face_yy,
+                        offsets,
+                        candidate_faces,
+                        self.scale,
+                        self.grid_size,
+                        start,
+                        stop,
+                    )
+                    result += cp.sum(errors, axis=1)
+                    continue
                 selected_faces, weights = locate(rotated[:, start:stop, :])
                 sampled = (
                     target_face_values[selected_faces.astype(cp.int64)]
@@ -542,11 +773,12 @@ class RotationGridIndex:
             angle = simplex[lowest].copy()
             cost = float(f_values[lowest].item())
 
-        angle_cpu = cp.asnumpy(angle).astype(np.float64, copy=False)
+        as_host = np.asarray if cp is np else cp.asnumpy
+        angle_cpu = as_host(angle).astype(np.float64, copy=False)
         return RotationSearchResult(
-            seed_angle=cp.asnumpy(seed).astype(np.float64, copy=False),
+            seed_angle=as_host(seed).astype(np.float64, copy=False),
             seed_cost=seed_cost,
-            seed_costs=cp.asnumpy(seed_costs).astype(np.float64, copy=False),
+            seed_costs=as_host(seed_costs).astype(np.float64, copy=False),
             angle=angle_cpu,
             cost=float(cost),
             rotation_matrix=rotation_matrix_from_angles(angle_cpu),
@@ -556,7 +788,7 @@ class RotationGridIndex:
 
 @dataclass(frozen=True)
 class RotationSearchResult:
-    """保存初始旋转搜索结果及诊断量。"""
+    "保存初始旋转搜索结果及诊断量。"
 
     seed_angle: np.ndarray
     seed_cost: float
@@ -571,12 +803,12 @@ def average_xz_sphere(
     x_surface: np.ndarray,
     z_surface: np.ndarray,
 ) -> np.ndarray:
-    """复现官方 ``average_xz_surf`` 的逐点加权单位化。"""
+    "复现官方 ``average_xz_surf`` 的逐点加权单位化。"
 
     x_value = np.asarray(x_surface, dtype=np.float64)
     z_value = np.asarray(z_surface, dtype=np.float64)
     if x_value.shape != z_value.shape or x_value.ndim != 2 or x_value.shape[1] != 3:
-        raise ValueError("两个球面必须同为 [N,3]")
+        raise ValueError("Both spheres must have shape [N,3]")
     phi_x = np.arccos(np.clip(x_value[:, 0], -1.0, 1.0)) / np.pi
     phi_z = np.arccos(np.clip(z_value[:, 2], -1.0, 1.0)) / np.pi
     weight_x = np.maximum(np.exp(-((2.0 * phi_x - 1.0) ** 2) / 0.1), 1.0e-19)

@@ -9,12 +9,12 @@ from pathlib import Path
 import tomllib
 import zipfile
 
-FORBIDDEN_IMPORTS = {"simnibs", "torch", "triton", "subprocess", "ctypes"}
+FORBIDDEN_IMPORTS = {"simnibs", "torch", "triton", "subprocess", "ctypes", "flashcharm"}
 
 
 def check_source(root: Path) -> None:
     """静态检查导入和语法，不运行 GPU，也不产生字节码缓存。"""
-    for path in sorted((root / "src" / "cat_surface_gpu").glob("*.py")):
+    for path in sorted((root / "src" / "cat_surface_gpu").rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
@@ -26,7 +26,7 @@ def check_source(root: Path) -> None:
             if FORBIDDEN_IMPORTS.intersection(names):
                 raise RuntimeError(f"Unexpected runtime dependency in {path}: {names}")
     for directory in ("tests", "tools", "scripts"):
-        for path in (root / directory).glob("*.py"):
+        for path in (root / directory).rglob("*.py"):
             ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
 
 

@@ -1,0 +1,22 @@
+{
+  "package": "cat-surface-gpu",
+  "version": "0.2.0",
+  "date": "2026-10-13",
+  "algorithm_upstream_commit": "b0c2aa2395ea4957a331b9444fb54c7716b6572d",
+  "source_directory": "src/cat_surface_gpu",
+  "sha256": {
+    "__init__.py": "ceba6a81a7bd9a742395ce87dda3690ffb5b3500463fa46100dea0b0b2e26db6",
+    "cli.py": "f0bb6db00891e476b410b2c85ad1b7b9d0ca6dc4691f3a01a9de71fbd444639a",
+    "dartel.py": "3b508fcaee1e6bf8c449324030bd5bf4ea56e614e8557717e172ddfdfe6f88f3",
+    "features.py": "df86fc11a8d96e9e60e9873c0c3a231bb8a7da86e745613582a510c1185f8048",
+    "geometry.py": "c3a231e38e64c299b6302e8ab268b045a1d2991374390d46ec771cf3c708c296",
+    "io.py": "a0c4bbafe66139619caad6786172e1a78865352cd0a4ac6d6410db349d65cec3",
+    "mapping.py": "1c4b2519f08bd3e9d3d83b848831320b697ebb5a2f496c5f69a27966d66581d0",
+    "parameters.py": "2b11f8cb02a116f4903b624d57722123c709b8913ae45c9542f8b06a811f8da0",
+    "resampling.py": "35bfbbeabd781ccd96e4ed3bb90c6c4b1c8fc44ef00bea9d622d33f8fa7d71ff",
+    "rotation.py": "df20eb5260886419f51c792a70c357a54bc8f4a800cb40b6908938398484e727",
+    "surf2sphere.py": "d54f86087c2c3008e04db0cd89fc17e9895aeec467ac404819de11a59244661a",
+    "surfwarp.py": "89756dc239b748b619e071042f52d65ac709641709719407ac5826c5510d9c36",
+    "topology.py": "c0da500496360a0c79bbcabd7ae8192896e1e9deba9097756079e1dd4201e96c"
+  }
+}

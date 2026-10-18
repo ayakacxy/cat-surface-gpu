@@ -2,6 +2,8 @@
 
 [English](RELEASE_v0.1.0.md) · [简体中文](RELEASE_v0.1.0.zh-CN.md)
 
+本文记录 v0.1.0。v0.3.0 的平台支持、安装与性能见[当前版本说明](RELEASE_v0.3.0.zh-CN.md)。
+
 首个版本使用 PyTorch 和 Triton 加速 `CAT_Surf2Sphere` 与 `CAT_SurfWarp`，同时保留 CAT-Surface CPU 参考程序和辅助程序。本项目是独立的社区项目，参考 CAT-Surface 固定提交 `628b6851d8638f3ab773cd25c0ec406d0ec61ede`。
 
 ### 主要功能

@@ -2,6 +2,8 @@
 
 [English](RELEASE_v0.2.0.md) · [简体中文](RELEASE_v0.2.0.zh-CN.md)
 
+This page documents v0.2.0. See the [v0.3.0 notes](RELEASE_v0.3.0.md) for current platform support, installation and benchmarks.
+
 Version 0.2.0 provides a native Python implementation of `CAT_Surf2Sphere` and `CAT_SurfWarp` using NumPy, Numba, and CuPy. Spherical inflation and surface registration run independently, without the CAT executable helpers used by v0.1.0.
 
 ### Highlights

@@ -1,6 +1,6 @@
 """基于官方 CAT-Surface 算法独立实现的 Python/CuPy 后端。"""
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 from .parameters import Surf2SphereParameters, SurfWarpParameters
 from .dartel import (
@@ -39,7 +39,7 @@ from .resampling import (
     nearest_vertices_cupy,
     prepare_spherical_resampler,
 )
-from .surf2sphere import surf_to_sphere_cupy
+from .surf2sphere import surf_to_sphere, surf_to_sphere_cupy
 from .rotation import (
     RotationGridIndex,
     RotationSearchResult,
@@ -94,6 +94,7 @@ __all__ = [
     "nearest_vertices_cpu",
     "prepare_spherical_resampler",
     "surf_to_sphere_cupy",
+    "surf_to_sphere",
     "surfwarp_single_run_cupy",
     "surfwarp_cupy",
     "type5_depth_feature_cupy",

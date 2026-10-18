@@ -14,7 +14,7 @@ python -m pytest -q --basetemp .work/setup/tmp/pytest
 python scripts/verify_release.py
 ```
 
-CPU tests can run without CuPy or a GPU. CUDA tests require a working NVIDIA device; report skips separately.
+The example installs CUDA support. Use `.[metal,test]` for Metal development or `.[test]` for CPU development. CPU tests require no GPU; CUDA tests require an NVIDIA device, and Metal tests require Apple Silicon macOS. Record skipped tests with the results.
 
 ## Algorithm changes
 

@@ -2,6 +2,8 @@
 
 [English](BENCHMARKS.md) · [简体中文](BENCHMARKS.zh-CN.md)
 
+This page documents v0.1.0. See the [v0.3.0 notes](RELEASE_v0.3.0.md) for current platform support, installation and benchmarks.
+
 These measurements describe **v0.1.0**, the PyTorch/Triton implementation with bundled CAT CPU programs. They are retained for reproducibility and do not measure the Python/Numba/CuPy implementation in v0.2.0. Results are specific to the hardware, software, inputs, and parameters below.
 
 ## Validated environment

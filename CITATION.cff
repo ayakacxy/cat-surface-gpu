@@ -2,8 +2,7 @@ cff-version: 1.2.0
 message: "If you use CAT-Surface GPU, please cite this software and the upstream CAT-Surface and SimNIBS projects."
 title: "CAT-Surface GPU"
 type: software
-version: 0.2.0
-date-released: 2026-10-13
+version: 0.3.0
 authors:
   - name: ayakacxy
 repository-code: "https://github.com/ayakacxy/cat-surface-gpu"

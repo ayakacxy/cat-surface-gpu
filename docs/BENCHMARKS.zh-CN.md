@@ -2,6 +2,8 @@
 
 [English](BENCHMARKS.md) · [简体中文](BENCHMARKS.zh-CN.md)
 
+本文记录 v0.1.0。v0.3.0 的平台支持、安装与性能见[当前版本说明](RELEASE_v0.3.0.zh-CN.md)。
+
 以下测量针对 **v0.1.0**，即使用 PyTorch/Triton 并附带 CAT CPU 程序的实现。这些记录用于复现旧版结果，不是 v0.2.0 Python/Numba/CuPy 实现的测量。结果仅适用于下列硬件、软件、输入和参数。
 
 ## 已验证的环境

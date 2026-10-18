@@ -2,6 +2,8 @@
 
 [English](RELEASE_v0.1.0.md) · [简体中文](RELEASE_v0.1.0.zh-CN.md)
 
+This page documents v0.1.0. See the [v0.3.0 notes](RELEASE_v0.3.0.md) for current platform support, installation and benchmarks.
+
 The first release accelerates `CAT_Surf2Sphere` and `CAT_SurfWarp` with PyTorch and Triton while retaining CAT-Surface CPU reference and helper programs. This is an independent community project, with CAT-Surface revision `628b6851d8638f3ab773cd25c0ec406d0ec61ede` as its reference.
 
 ### Highlights

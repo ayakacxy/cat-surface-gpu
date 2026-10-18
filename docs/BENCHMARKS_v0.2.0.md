@@ -2,6 +2,8 @@
 
 [English](BENCHMARKS_v0.2.0.md) · [简体中文](BENCHMARKS_v0.2.0.zh-CN.md)
 
+This page documents v0.2.0. See the [v0.3.0 notes](RELEASE_v0.3.0.md) for current platform support, installation and benchmarks.
+
 These measurements use the released **v0.2.0** wheel and the unmodified CAT-Surface CPU reference at commit `b0c2aa2395ea4957a331b9444fb54c7716b6572d`. The results below were recorded on **2026-10-13**. Historical PyTorch/Triton measurements remain in the [v0.1.0 benchmarks](BENCHMARKS.md).
 
 ## Environment and workload

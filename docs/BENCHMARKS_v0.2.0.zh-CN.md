@@ -2,6 +2,8 @@
 
 [English](BENCHMARKS_v0.2.0.md) · [简体中文](BENCHMARKS_v0.2.0.zh-CN.md)
 
+本文记录 v0.2.0。v0.3.0 的平台支持、安装与性能见[当前版本说明](RELEASE_v0.3.0.zh-CN.md)。
+
 本次使用已发布的 **v0.2.0** wheel，以及未经修改的 CAT-Surface CPU 参考程序，固定提交为 `b0c2aa2395ea4957a331b9444fb54c7716b6572d`。以下结果记录于 **2026-10-13**。PyTorch/Triton 旧版数据保留在 [v0.1.0 历史基准](BENCHMARKS.zh-CN.md)中。
 
 ## 环境与输入

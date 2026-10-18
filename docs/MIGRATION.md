@@ -1,10 +1,19 @@
-# Migrating from v0.1.0 to v0.2.0
+# Version Migration Guide
 
 [English](MIGRATION.md) · [简体中文](MIGRATION.zh-CN.md)
 
+## v0.2.0 → v0.3.0
+
+- CLI names, file arguments and CUDA array APIs are retained. The default device remains `cuda`.
+- New devices are `--device cpu`, `--device metal` and `--device auto`. Install `.[metal]` for Metal or the base dependencies for CPU.
+- Use `surf_to_sphere(..., device=...)` for spherical inflation and `surfwarp_cupy(..., backend="cpu" | "cupy" | "metal")` for registration.
+- CUDA and Metal feature solves and DARTEL use FP32; final exponentiation remains FP64. See [v0.3.0 release notes](RELEASE_v0.3.0.md) for numerical differences and benchmarks.
+
+## v0.1.0 → v0.2.0
+
 Version 0.2.0 replaces the earlier PyTorch/Triton implementation and CAT helper programs with a native Python implementation using NumPy, Numba, and CuPy. Install it in a separate environment when keeping v0.1.0 available for comparisons.
 
-## Dependencies and files
+### Dependencies and files
 
 | v0.1.0 | v0.2.0 |
 | --- | --- |
@@ -15,7 +24,7 @@ Version 0.2.0 replaces the earlier PyTorch/Triton implementation and CAT helper 
 
 The package runs independently. Supply your own GIFTI surfaces and template.
 
-## Commands
+### Commands
 
 The main command names and input/output file arguments are retained:
 
@@ -28,14 +37,14 @@ Remove v0.1.0 backend options such as `--kernel triton`, `--dtype`, `--preproces
 
 The old standalone rotation command is not provided. Rotation is part of `cat-surfwarp-gpu`. See the current [README examples](../README.md#run).
 
-## Python API
+### Python API
 
 Replace `run_cat_surf2sphere_gpu` with `surf_to_sphere_cupy` and `run_cat_surface_gpu_pipeline` with `surfwarp_cupy`. The new functions operate on vertex and triangle arrays and use `Surf2SphereParameters` or `SurfWarpParameters`. They are not drop-in wrappers for the earlier file-oriented functions. See [API examples](IMPLEMENTATION.md).
 
-## Results and performance
+### Results and performance
 
 Both the upstream source revision and the implementation changed. The default v0.2.0 DARTEL solver uses 40 PCG iterations, whereas the official reference uses FMG. Keep v0.1.0 thresholds and timings attached to v0.1.0; establish new tolerances from same-input comparisons against the v0.2.0 reference revision.
 
-The historical 55.2573-second bilateral measurement describes the v0.1.0 CAT registration chain. Measured v0.2.0 command timings and output differences are recorded in the [current benchmarks](BENCHMARKS_v0.2.0.md).
+The historical 55.2573-second bilateral measurement describes the v0.1.0 CAT registration chain. Measured v0.2.0 command timings and output differences are recorded in the [v0.2.0 benchmarks](BENCHMARKS_v0.2.0.md).
 
 [Documentation index](README.md) · [Project README](../README.md)

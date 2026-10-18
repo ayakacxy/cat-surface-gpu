@@ -11,7 +11,14 @@ permissions:
 
 jobs:
   test-and-package:
-    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     timeout-minutes: 30
     env:
       TMPDIR: ${{ github.workspace }}/.work/ci/tmp
@@ -19,6 +26,7 @@ jobs:
       TEMP: ${{ github.workspace }}/.work/ci/tmp
       XDG_CACHE_HOME: ${{ github.workspace }}/.work/ci/cache
       PIP_CACHE_DIR: ${{ github.workspace }}/.work/ci/cache/pip
+      CAT_SURFACE_CACHE_ROOT: ${{ github.workspace }}/.work/ci/cache/targets
       NUMBA_CACHE_DIR: ${{ github.workspace }}/.work/ci/cache/numba
       PYTHONPYCACHEPREFIX: ${{ github.workspace }}/.work/ci/cache/pycache
       RUFF_CACHE_DIR: ${{ github.workspace }}/.work/ci/cache/ruff
@@ -47,7 +55,7 @@ jobs:
       - name: Build wheel and source archive
         run: python -m build --outdir .work/ci/dist
       - name: Verify wheel contents
-        run: python scripts/verify_release.py --wheel .work/ci/dist/cat_surface_gpu-0.2.0-py3-none-any.whl
+        run: python scripts/verify_release.py --wheel .work/ci/dist/cat_surface_gpu-0.3.0-py3-none-any.whl
       - name: Test installed command-line interfaces
         run: |
           python -m pip install --force-reinstall --no-deps .work/ci/dist/*.whl
@@ -55,6 +63,6 @@ jobs:
           cat-surfwarp-gpu --help
       - uses: actions/upload-artifact@v7
         with:
-          name: python-distributions
+          name: python-distributions-${{ matrix.os }}
           path: .work/ci/dist/*
           if-no-files-found: error

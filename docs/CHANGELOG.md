@@ -4,6 +4,13 @@
 
 All notable changes are documented here.
 
+## 0.3.0 — In development, unreleased
+
+- Add CUDA tiled smoothing, FP32 feature solves, resident DARTEL and fixed-target caches.
+- Add complete CPU execution and MLX Metal dispatch, retaining both CLIs and CUDA array APIs.
+- Preserve parameter, GIFTI and fixed-PCG zero-residual checks; configure Windows/macOS CPU CI.
+- See [v0.3.0 notes](RELEASE_v0.3.0.md) for platform support, benchmarks and numerical comparisons.
+
 ## [0.2.0] - 2026-10-13
 
 ### Added and changed

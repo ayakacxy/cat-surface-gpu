@@ -17,7 +17,7 @@ body:
     id: environment
     attributes:
       label: Environment / 运行环境
-      description: Include OS, GPU, driver, Python, CuPy, NumPy, Numba, and package version. / 请提供操作系统、GPU、驱动、Python、CuPy、NumPy、Numba 和本软件包版本。
+      description: Include OS, GPU, driver, Python, backend, CuPy or MLX, NumPy, Numba, and package version. / 请提供操作系统、GPU、驱动、Python、后端、CuPy 或 MLX、NumPy、Numba 和本软件包版本。
     validations:
       required: true
   - type: textarea
@@ -39,5 +39,5 @@ body:
       options:
         - label: I removed personal, clinical, and identifiable data. / 我已移除个人、临床及可识别身份的数据。
           required: true
-        - label: I confirmed that CUDA was actually visible if this is a GPU report. / 如果这是 GPU 相关报告，我已确认运行环境能够访问 CUDA 设备。
+        - label: I confirmed that the selected CUDA or Metal backend was available if this is a GPU report. / 如果这是 GPU 相关报告，我已确认运行环境能够访问所选 CUDA 或 Metal 设备。
           required: true

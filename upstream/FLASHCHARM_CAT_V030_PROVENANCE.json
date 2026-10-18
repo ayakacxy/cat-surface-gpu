@@ -1,0 +1,161 @@
+{
+  "date": "2026-10-18",
+  "source": "FlashCHARM working tree",
+  "files": [
+    {
+      "source": "backends/cpu/surf2sphere.py",
+      "source_sha256": "50dad65d45d4b671a4ad676a3fe51eba6128542337f83e81a06fdf69557a53f5"
+    },
+    {
+      "source": "backends/cuda/dependency_tiles.py",
+      "source_sha256": "f5f9b55c6f11ea3bfa21b5af1400e05775d8431ed655de7b26cbc86b2cdd21da"
+    },
+    {
+      "source": "backends/cuda/features.py",
+      "source_sha256": "950d7c8bda69a068f6db71cc85856fc2bc6534fdec78d61129573c3ab31970fe"
+    },
+    {
+      "source": "backends/cuda/geometry.py",
+      "source_sha256": "b5595c75ac32c0ad8704d654ec61dea77a3d198a27289f9a6ba843c272da62d7"
+    },
+    {
+      "source": "backends/cuda/pcg_fp32.py",
+      "source_sha256": "fb18f58b7333b003c6bb8898db1b6d71aeb28ff96c296aa7b37b82c55fc3a67a"
+    },
+    {
+      "source": "backends/cuda/pcg_graph.py",
+      "source_sha256": "5e43b6b40bb4bcea262a115c8af9314b73b398b2e4c9726178ae24f510440df7"
+    },
+    {
+      "source": "backends/cuda/resampling.py",
+      "source_sha256": "b79ed7ee86c619abb5206a4c4559d3b7d07a9f6d89bab3d6537b13913ce99e20"
+    },
+    {
+      "source": "backends/cuda/rotation.py",
+      "source_sha256": "50b1ae8059663f6be0a6e7ed0b6899a38c47e694bd92b5109bdb7b8c9a19f405"
+    },
+    {
+      "source": "backends/cuda/rotation_fp32.py",
+      "source_sha256": "b99bc70aa835f8ef1262aea5f1d01e79a2f2bb82dabc33696adac31051ceb859"
+    },
+    {
+      "source": "backends/cuda/surf2sphere.py",
+      "source_sha256": "2ded5c577b82ad674e4d4a93066c2ae385c83c1dbf98430dfd6f58410591f1d8"
+    },
+    {
+      "source": "backends/cuda/tiled.py",
+      "source_sha256": "e95dc9ae7315bdb10fa49597a905eb56a357a367f2dbfa6657875025bf8e647f"
+    },
+    {
+      "source": "backends/cuda/transport.py",
+      "source_sha256": "2ecf8dccfcfeee53afb4426350c035f6f6dbccc1f9b2801914f75624bf8187b2"
+    },
+    {
+      "source": "backends/cuda/warp.py",
+      "source_sha256": "549e1f570bb3bc9a2d5105412170edbf038d5fdab28ebe4b755ab0e0fa7fc7e3"
+    },
+    {
+      "source": "backends/metal/dartel.py",
+      "source_sha256": "ffabefce8e56dc57acd529e68f0c6d6d0484f1527ce58e6cfe98524b43095225"
+    },
+    {
+      "source": "backends/metal/features.py",
+      "source_sha256": "40e67ae16b749852e08f48022ac8e91ce053b1774d149936f2adb84abadc5537"
+    },
+    {
+      "source": "backends/metal/resampling.py",
+      "source_sha256": "3eace99b590e7e1a0becbbbdf79176f4e8a10b3d199f3e5069c16d36c8e00009"
+    },
+    {
+      "source": "backends/metal/rotation.py",
+      "source_sha256": "bb3b6f56284eac371137a85add940c229e759546db63af354b54b67303f2a353"
+    },
+    {
+      "source": "backends/metal/surf2sphere.py",
+      "source_sha256": "34e86a1d936c6837770d2a633f7371007283e618b4ac427e96405b48ed981e2d"
+    },
+    {
+      "source": "backends/metal/warp.py",
+      "source_sha256": "52c3d260e676f8d102fcc6d1e07850f8235ab221d2656af9cb782005ac2cb0cf"
+    },
+    {
+      "source": "dartel.py",
+      "source_sha256": "763d3afc0b22a029277b51239ca55333a848196d5e2e3c80640e29c1e4bb3949"
+    },
+    {
+      "source": "features.py",
+      "source_sha256": "2e4298740405deaf9bcef076e27f939c26b9ecaea1d34cef27ac2b11d81b5fdb"
+    },
+    {
+      "source": "geometry.py",
+      "source_sha256": "1616a556a8ebba19b5cfcc8effc26255dae04d22f483b46794e62e965c19d0e1"
+    },
+    {
+      "source": "resampling.py",
+      "source_sha256": "1e1036098d136fdbe0a200a2d32252e1f5de2f44f293152a37172635b9cd8679"
+    },
+    {
+      "source": "rotation.py",
+      "source_sha256": "3042b3147492d6da69a8a89072bff9a334ad788447489b62f3fa870609fa29fa"
+    },
+    {
+      "source": "surfwarp.py",
+      "source_sha256": "1e931c3209d954de5e05837f86e4d6560324db13ef83f236bcecc5491adae613"
+    },
+    {
+      "source": "templates.py",
+      "source_sha256": "ec658e9e84281992a7e58d69395246303256728193909d5d3161b7dc1a983f7b"
+    },
+    {
+      "source": "topology.py",
+      "source_sha256": "0946f6b40a149188d4c9bf5c0d8eff5a2ccf6d2b53d39c6823ac87accb361c18"
+    }
+  ],
+  "adaptations": [
+    "Independent namespace and task-local target caches",
+    "Preserved v0.2 parameter, GIFTI, progress and fixed-PCG zero-residual behavior",
+    "Connected Metal kernels to shared registration, feature, resampling and rotation orchestration",
+    "Translated comments and docstrings to Chinese",
+    "Reuse content-keyed topology at standalone entry points and validate shared registration inputs once"
+  ],
+  "candidate_sha256": {
+    "__init__.py": "a80a85c25e68ef44074d3d66da5233298f4efdc3239071358ef51f310d4ca1f0",
+    "backends/__init__.py": "66e74799e92960f07ede8c95e82ef15f782eacbaebb1db7978e50af6940a4cc4",
+    "backends/cpu/__init__.py": "66e74799e92960f07ede8c95e82ef15f782eacbaebb1db7978e50af6940a4cc4",
+    "backends/cpu/surf2sphere.py": "36bb5c6bd616bfd2932aa8243c1e591acc2f7bbca3d52b038a189c23190c823a",
+    "backends/cuda/__init__.py": "66e74799e92960f07ede8c95e82ef15f782eacbaebb1db7978e50af6940a4cc4",
+    "backends/cuda/dependency_tiles.py": "3b3fc312bb04a8a37ce7655aff73ad951276164284e91689c01d615df140ad4a",
+    "backends/cuda/features.py": "8f2246a6e2acdcd2508c8732bafa202df3816d6e714dabae60ef21f53678ff7b",
+    "backends/cuda/geometry.py": "7b9a5ae2635a8cbe91241061e3734bd152b77e254db9b52fff71eb290408eb26",
+    "backends/cuda/pcg_fp32.py": "a7b3be307f04d52249301031eab0fc1f4b83e379a33cd07c93d46e745bd5c40b",
+    "backends/cuda/pcg_graph.py": "1f016dd4862f06888b33e3cb85f925d00cf2e62370189f4679e0e6704d4a7c8e",
+    "backends/cuda/resampling.py": "6bd6d1be7fd61ba4e2d0443dc91ade51f374d2fceee331270741927f6da33473",
+    "backends/cuda/rotation.py": "55794c2d63f20bd04671427aa21a7d5e1b00ffac873e192a2717c9b9213866bb",
+    "backends/cuda/rotation_fp32.py": "c0fba5d511e4327050372c658691ae405bc614712e4e8d763d192991ce0d9013",
+    "backends/cuda/surf2sphere.py": "5863b9ed87655d0dd77c8ed0ae995b5f1bfa867a7380987a930b0643e5b5a336",
+    "backends/cuda/tiled.py": "a2562edcb23afb55ede8ef281ea142ebeef25cb4c86f6e953922fd223d6147db",
+    "backends/cuda/transport.py": "903c46d9f44404bf2a07e760bebe89365d62046d81cfb2e41f8702f56348f14c",
+    "backends/cuda/warp.py": "1512fd7083e38ae9fc54e49fc3c5a5b601deec67e60295974807ff03d2d69a41",
+    "backends/metal/__init__.py": "66e74799e92960f07ede8c95e82ef15f782eacbaebb1db7978e50af6940a4cc4",
+    "backends/metal/dartel.py": "3e5b28e2b25bfd2657dc707d8e5e26445ae9ba5ccb9f65c8a6f7bd9fcddf17bc",
+    "backends/metal/features.py": "83a41e8a1d177efb554ed32e553759ac6a11e4ae0a24aded63ea8abc21955d0c",
+    "backends/metal/resampling.py": "64ff79963bb2a29394b97590b8e328d3b1daf229a7f33d95d807a3ba07ba901a",
+    "backends/metal/rotation.py": "a5ed1adbe55a9746a1e35245556ea72bab158b637f4f9bdd520faee5dcc5e0d5",
+    "backends/metal/surf2sphere.py": "983c13368a190a7e639824da5890477cbbb02864414b9db332b8fe19dd1e5265",
+    "backends/metal/warp.py": "427595ad12804f2a55e2ef2e8fff6c757c33935779224a81d731229ed56e4e8c",
+    "cli.py": "a3f9d6bb2ddc976aeb4e22c530a41cccd39833bc1ba09a5a0683b46ab356789d",
+    "dartel.py": "3057e7612bbe3b82f62c18117b1d6eacdcd21f1e30d312ba4600991d19b5759e",
+    "features.py": "01789d80bbbc20287ab6a6a0fd3df0d6196e06dd2abb53bbe43bdfb0a76379ab",
+    "geometry.py": "a18a1f2ec0e186015a090e7643a48eb9719841b27f1da2acc2c96290b679dc73",
+    "io.py": "a0c4bbafe66139619caad6786172e1a78865352cd0a4ac6d6410db349d65cec3",
+    "mapping.py": "1c4b2519f08bd3e9d3d83b848831320b697ebb5a2f496c5f69a27966d66581d0",
+    "parameters.py": "2b11f8cb02a116f4903b624d57722123c709b8913ae45c9542f8b06a811f8da0",
+    "resampling.py": "5a32a0a4f1759528553ed2d6eaae68276756313fa0d11b49494bd589d811e6f0",
+    "rotation.py": "5966be7a89022a2b9cbcf554805bedb08baf39f64e854e8978654871d7026bc2",
+    "runtime.py": "c45225fe965c5c1f493fe2151658411ed809a31efc88ff454d55cf9df7497a47",
+    "surf2sphere.py": "704db95385f96d8fba17f9e4072e446abb97e05a298c67a120e523480e30e636",
+    "surfwarp.py": "578a36721226fe97405ccd75e6b9db40fc003c32abe39fed5a54604733e35214",
+    "templates.py": "817a677e3cbc8a28196dd5f6ed5d9ddc0c740ae267fcec8e96acfc087aa484a7",
+    "topology.py": "8cbfd23b18d08c5a8a8d277f700bc894fd372e6b100e910ac74bd90a074a4160"
+  }
+}

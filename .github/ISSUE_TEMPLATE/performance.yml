@@ -7,7 +7,7 @@ body:
     id: hardware
     attributes:
       label: Hardware and software / 硬件与软件
-      description: GPU, CPU, RAM, driver, CUDA, Python, CuPy, NumPy, Numba, commit, and compiler. / 请提供 GPU、CPU、内存、驱动、CUDA、Python、CuPy、NumPy、Numba、提交版本和编译器。
+      description: GPU, CPU, RAM, driver, CUDA, Python, backend, CuPy or MLX, NumPy, Numba, commit, and compiler. / 请提供 GPU、CPU、内存、驱动、CUDA、Python、后端、CuPy 或 MLX、NumPy、Numba、提交版本和编译器。
     validations:
       required: true
   - type: textarea

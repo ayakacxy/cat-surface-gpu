@@ -2,6 +2,8 @@
 
 [English](RELEASE_v0.2.0.md) · [简体中文](RELEASE_v0.2.0.zh-CN.md)
 
+本文记录 v0.2.0。v0.3.0 的平台支持、安装与性能见[当前版本说明](RELEASE_v0.3.0.zh-CN.md)。
+
 v0.2.0 使用 NumPy、Numba 和 CuPy 原生 Python 实现 `CAT_Surf2Sphere` 和 `CAT_SurfWarp`。球面膨胀与曲面配准可独立运行，无需 v0.1.0 使用的 CAT 辅助程序。
 
 ### 主要变化

@@ -1,16 +1,17 @@
-"""直接对应官方 CAT type-5 深度特征的表面平滑算子。"""
+"直接对应官方 CAT type-5 深度特征的表面平滑算子。"
 
 from __future__ import annotations
 
 import math
 
 import numpy as np
+from numba import njit, prange
 
 from .topology import SurfaceTopology
 
 
 def build_smoothing_topology(faces: np.ndarray, n_vertices: int) -> SurfaceTopology:
-    """用 CSR 稀疏邻接生成平滑所需的无序邻点表。"""
+    "用 CSR 稀疏邻接生成平滑所需的无序邻点表。"
 
     from scipy.sparse import csr_matrix
 
@@ -47,7 +48,7 @@ def build_smoothing_topology(faces: np.ndarray, n_vertices: int) -> SurfaceTopol
 def _smoothing_parameters(
     vertices: np.ndarray, faces: np.ndarray, fwhm: float
 ) -> tuple[int, float]:
-    """按官方平均面边长度公式计算迭代次数和高斯带宽。"""
+    "按官方平均面边长度公式计算迭代次数和高斯带宽。"
 
     points = np.asarray(vertices, dtype=np.float64)
     triangles = np.asarray(faces, dtype=np.int64)
@@ -64,7 +65,7 @@ def _smoothing_parameters(
 
 
 def _vertex_normals(vertices: np.ndarray, faces: np.ndarray) -> np.ndarray:
-    """由有向面法向累加并单位化得到顶点法向。"""
+    "由有向面法向累加并单位化得到顶点法向。"
 
     points = np.asarray(vertices, dtype=np.float32)
     triangles = np.asarray(faces, dtype=np.int64)
@@ -82,15 +83,83 @@ def _vertex_normals(vertices: np.ndarray, faces: np.ndarray) -> np.ndarray:
     return normals
 
 
+@njit(cache=True, parallel=True, fastmath=False)
+def _smooth_positions_cpu_fused(points, neighbours, mask, denominator, iterations):
+    "使用双缓冲同步平滑坐标，避免每轮构造完整邻域数组。"
+
+    current = points.copy()
+    following = np.empty_like(current)
+    count = current.shape[0]
+    slots = neighbours.shape[1]
+    three = np.float32(3.0)
+    for _ in range(iterations):
+        for vertex in prange(count):
+            total_x = np.float32(0.0)
+            total_y = np.float32(0.0)
+            total_z = np.float32(0.0)
+            for slot in range(slots):
+                other = neighbours[vertex, slot]
+                weight = mask[vertex, slot]
+                total_x += current[other, 0] * weight
+                total_y += current[other, 1] * weight
+                total_z += current[other, 2] * weight
+            following[vertex, 0] = (current[vertex, 0] + total_x / three) / denominator[
+                vertex
+            ]
+            following[vertex, 1] = (current[vertex, 1] + total_y / three) / denominator[
+                vertex
+            ]
+            following[vertex, 2] = (current[vertex, 2] + total_z / three) / denominator[
+                vertex
+            ]
+        current, following = following, current
+    return current
+
+
+@njit(cache=True, parallel=True, fastmath=False)
+def _smooth_values_cpu_fused(values, neighbours, weights, denominator, iterations):
+    "使用固定原始权重和可复用缓冲同步平滑标量。"
+
+    current = values.copy()
+    following = np.empty_like(current)
+    count = current.size
+    slots = neighbours.shape[1]
+    for _ in range(iterations):
+        for vertex in prange(count):
+            neighbour_sum = 0.0
+            for slot in range(slots):
+                neighbour_sum += (
+                    current[neighbours[vertex, slot]] * weights[vertex, slot]
+                )
+            following[vertex] = (current[vertex] + neighbour_sum) / denominator[vertex]
+        current, following = following, current
+    return current
+
+
 def smooth_positions_cupy(
     vertices: np.ndarray,
     topology: SurfaceTopology,
     iterations: int,
+    *,
+    array_module=None,
 ) -> np.ndarray:
-    """复现中心权重 1、邻点权重 1/3 的同步位置平滑。"""
+    "复现中心权重 1、邻点权重 1/3 的同步位置平滑。"
 
-    import cupy as cp
+    if array_module is None:
+        import cupy as cp
+    else:
+        cp = array_module
 
+    if cp is np:
+        current = np.ascontiguousarray(vertices, dtype=np.float32)
+        neighbours = np.ascontiguousarray(topology.neighbours, dtype=np.int32)
+        mask = np.ascontiguousarray(topology.neighbour_mask, dtype=np.float32)
+        denominator = np.ascontiguousarray(
+            1.0 + np.sum(mask, axis=1) / 3.0, dtype=np.float32
+        )
+        return _smooth_positions_cpu_fused(
+            current, neighbours, mask, denominator, int(iterations)
+        )
     current = cp.asarray(vertices, dtype=cp.float32)
     neighbours = cp.asarray(topology.neighbours, dtype=cp.int32)
     mask = cp.asarray(topology.neighbour_mask, dtype=cp.float32)
@@ -98,7 +167,7 @@ def smooth_positions_cupy(
     for _ in range(int(iterations)):
         neighbour_sum = cp.sum(current[neighbours] * mask[:, :, None], axis=1)
         current = (current + neighbour_sum / 3.0) / denominator[:, None]
-    return cp.asnumpy(current)
+    return np.asarray(current) if cp is np else cp.asnumpy(current)
 
 
 def _smooth_values_cupy(
@@ -107,10 +176,15 @@ def _smooth_values_cupy(
     values: np.ndarray,
     topology: SurfaceTopology,
     fwhm: float,
+    *,
+    array_module=None,
 ) -> np.ndarray:
-    """按固定原表面边长执行官方高斯热核标量平滑。"""
+    "按固定原表面边长执行官方高斯热核标量平滑。"
 
-    import cupy as cp
+    if array_module is None:
+        import cupy as cp
+    else:
+        cp = array_module
 
     iterations, sigma = _smoothing_parameters(vertices, faces, fwhm)
     points = cp.asarray(vertices, dtype=cp.float64)
@@ -121,11 +195,19 @@ def _smooth_values_cupy(
     weights = cp.exp(-(distances * distances) / (2.0 * sigma * sigma))
     weights = cp.where(mask, weights, 0.0)
     denominator = 1.0 + cp.sum(weights, axis=1)
+    if cp is np:
+        return _smooth_values_cpu_fused(
+            np.ascontiguousarray(current, dtype=np.float64),
+            np.ascontiguousarray(neighbours, dtype=np.int32),
+            np.ascontiguousarray(weights, dtype=np.float64),
+            np.ascontiguousarray(denominator, dtype=np.float64),
+            int(iterations),
+        )
     for _ in range(iterations):
         current = (
             current + cp.sum(current[neighbours] * weights, axis=1)
         ) / denominator
-    return cp.asnumpy(current)
+    return np.asarray(current) if cp is np else cp.asnumpy(current)
 
 
 def type5_depth_feature_cupy(
@@ -134,8 +216,9 @@ def type5_depth_feature_cupy(
     fwhm: float,
     *,
     topology: SurfaceTopology | None = None,
+    array_module=None,
 ) -> np.ndarray:
-    """计算官方 curvtype=5 的 50 mm 深度、最终平滑和归一化。"""
+    "计算官方 curvtype=5 的 50 mm 深度、最终平滑和归一化。"
 
     points = np.ascontiguousarray(vertices, dtype=np.float32)
     triangles = np.ascontiguousarray(faces, dtype=np.int32)
@@ -145,19 +228,23 @@ def type5_depth_feature_cupy(
         else build_smoothing_topology(triangles, points.shape[0])
     )
     position_iterations, _ = _smoothing_parameters(points, triangles, 50.0)
-    smoothed = smooth_positions_cupy(points, tables, position_iterations)
+    smoothed = smooth_positions_cupy(
+        points, tables, position_iterations, array_module=array_module
+    )
     normals = _vertex_normals(smoothed, triangles)
     depth = np.sum((smoothed - points) * normals, axis=1, dtype=np.float32).astype(
         np.float64
     )
-    values = _smooth_values_cupy(points, triangles, depth, tables, float(fwhm))
+    values = _smooth_values_cupy(
+        points, triangles, depth, tables, float(fwhm), array_module=array_module
+    )
     minimum = float(values.min())
     maximum = float(values.max())
     return (values - minimum) / (maximum - minimum)
 
 
 def _face_vectors_cupy(points, faces):
-    """按 CAT 面片顺序生成三条有向边。"""
+    "按 CAT 面片顺序生成三条有向边。"
 
     triangles = points[faces]
     return (
@@ -167,10 +254,13 @@ def _face_vectors_cupy(points, faces):
     )
 
 
-def _stable_normals_cupy(points, faces):
-    """复现官方 ``stable_normals`` 的角度加权顶点法向。"""
+def _stable_normals_cupy(points, faces, array_module=None):
+    "复现官方 ``stable_normals`` 的角度加权顶点法向。"
 
-    import cupy as cp
+    if array_module is None:
+        import cupy as cp
+    else:
+        cp = array_module
 
     v1, v2, v3 = _face_vectors_cupy(points, faces)
     eps = cp.finfo(cp.float64).eps
@@ -194,10 +284,13 @@ def _stable_normals_cupy(points, faces):
     return result / cp.maximum(cp.linalg.norm(result, axis=1, keepdims=True), eps)
 
 
-def _mixed_voronoi_areas_cupy(points, faces):
-    """复现官方 ``compute_areas(..., lambda=2)`` 的混合面积。"""
+def _mixed_voronoi_areas_cupy(points, faces, array_module=None):
+    "复现官方 ``compute_areas(..., lambda=2)`` 的混合面积。"
 
-    import cupy as cp
+    if array_module is None:
+        import cupy as cp
+    else:
+        cp = array_module
 
     v1, v2, v3 = _face_vectors_cupy(points, faces)
     eps = cp.finfo(cp.float64).eps
@@ -231,10 +324,13 @@ def _mixed_voronoi_areas_cupy(points, faces):
     return cp.where((~cp.isfinite(result)) | (result == 0.0), 1.0, result)
 
 
-def _depth_system_entries_cupy(points, faces, areas, alpha):
-    """生成官方 depth-potential 的 ``0.5*L + alpha*diag(area)`` 条目。"""
+def _depth_system_entries_cupy(points, faces, areas, alpha, array_module=None):
+    "生成官方 depth-potential 的 ``0.5*L + alpha*diag(area)`` 条目。"
 
-    import cupy as cp
+    if array_module is None:
+        import cupy as cp
+    else:
+        cp = array_module
 
     v1, v2, v3 = _face_vectors_cupy(points, faces)
     area = cp.maximum(
@@ -267,11 +363,54 @@ def _depth_system_entries_cupy(points, faces, areas, alpha):
     return rows, cols, values
 
 
-def _depth_matvec_cupy(rows, cols, values, vector, n_points):
-    """执行带重复条目的 GPU 矩阵向量乘。"""
+@njit(cache=True, fastmath=False)
+def _depth_matvec_cpu_ordered(rows, cols, values, vector, n_points):
+    "按原始顺序累加稀疏项，避免重复索引的 NumPy 调度开销。"
 
-    import cupy as cp
+    output = np.zeros(n_points, dtype=np.float64)
+    for index in range(rows.size):
+        output[rows[index]] += values[index] * vector[cols[index]]
+    return output
 
+
+def _depth_csr_cpu_ordered(rows, cols, values, n_points):
+    "按行稳定分组，保留每行浮点累加顺序。"
+
+    order = np.argsort(rows, kind="stable")
+    offsets = np.empty(n_points + 1, dtype=np.int64)
+    offsets[0] = 0
+    np.cumsum(np.bincount(rows, minlength=n_points), out=offsets[1:])
+    return (
+        offsets,
+        np.ascontiguousarray(cols[order], dtype=np.int32),
+        np.ascontiguousarray(values[order], dtype=np.float64),
+    )
+
+
+@njit(cache=True, parallel=True, fastmath=False)
+def _depth_matvec_cpu_csr(offsets, cols, values, vector):
+    "各行独立执行保序的 FP64 稀疏乘法。"
+
+    n_points = offsets.size - 1
+    output = np.empty(n_points, dtype=np.float64)
+    for row in prange(n_points):
+        total = 0.0
+        for index in range(offsets[row], offsets[row + 1]):
+            total += values[index] * vector[cols[index]]
+        output[row] = total
+    return output
+
+
+def _depth_matvec_cupy(rows, cols, values, vector, n_points, array_module=None):
+    "执行带重复条目的 GPU 矩阵向量乘。"
+
+    if array_module is None:
+        import cupy as cp
+    else:
+        cp = array_module
+
+    if cp is np:
+        return _depth_matvec_cpu_ordered(rows, cols, values, vector, n_points)
     output = cp.zeros(n_points, dtype=cp.float64)
     cp.add.at(output, rows, values * vector[cols])
     return output
@@ -287,32 +426,36 @@ def depth_potential_feature_cupy(
     tolerance: float = 1.0e-9,
     topology: SurfaceTopology | None = None,
     return_raw: bool = False,
+    array_module=None,
 ) -> np.ndarray:
-    """计算官方 ``curvtype=1000`` 的 depth-potential 旋转特征。
+    "计算官方 ``curvtype=1000`` 的 depth-potential 旋转特征。\n\n线性系统仍使用官方 cotangent Laplacian 和混合 Voronoi 面积；求解器\n采用双精度 Jacobi-PCG，保留用户已经确认的 GPU PCG 路线，最后执行\n官方 50 mm heat-kernel 和 min/max 归一化。"
 
-    线性系统仍使用官方 cotangent Laplacian 和混合 Voronoi 面积；求解器
-    采用双精度 Jacobi-PCG，保留用户已经确认的 GPU PCG 路线，最后执行
-    官方 50 mm heat-kernel 和 min/max 归一化。
-    """
-
-    import cupy as cp
+    if array_module is None:
+        import cupy as cp
+    else:
+        cp = array_module
 
     points = cp.asarray(np.asarray(vertices, dtype=np.float64))
     triangles = cp.asarray(np.asarray(faces, dtype=np.int32))
     n_points = int(points.shape[0])
-    areas = _mixed_voronoi_areas_cupy(points, triangles)
-    normals = _stable_normals_cupy(points, triangles)
+    areas = _mixed_voronoi_areas_cupy(points, triangles, cp)
+    normals = _stable_normals_cupy(points, triangles, cp)
     rows, cols, values = _depth_system_entries_cupy(
-        points, triangles, areas, float(alpha)
+        points, triangles, areas, float(alpha), cp
     )
     lap_rows, lap_cols, lap_values = _depth_system_entries_cupy(
-        points, triangles, cp.zeros_like(areas), 0.0
+        points, triangles, cp.zeros_like(areas), 0.0, cp
     )
+    if cp is np:
+        system_csr = _depth_csr_cpu_ordered(rows, cols, values, n_points)
+        laplacian_csr = _depth_csr_cpu_ordered(lap_rows, lap_cols, lap_values, n_points)
     laplacian = (
         cp.stack(
             tuple(
-                _depth_matvec_cupy(
-                    lap_rows, lap_cols, lap_values, points[:, axis], n_points
+                _depth_matvec_cpu_csr(*laplacian_csr, points[:, axis])
+                if cp is np
+                else _depth_matvec_cupy(
+                    lap_rows, lap_cols, lap_values, points[:, axis], n_points, cp
                 )
                 for axis in range(3)
             ),
@@ -338,7 +481,11 @@ def depth_potential_feature_cupy(
     rho = cp.sum(residual * (residual / diagonal))
     direction = residual / diagonal
     for _ in range(int(max_iterations)):
-        applied = _depth_matvec_cupy(rows, cols, values, direction, n_points)
+        applied = (
+            _depth_matvec_cpu_csr(*system_csr, direction)
+            if cp is np
+            else _depth_matvec_cupy(rows, cols, values, direction, n_points, cp)
+        )
         denominator = cp.sum(direction * applied)
         step = cp.where(denominator != 0.0, rho / denominator, 0.0)
         solution += step * direction
@@ -351,7 +498,7 @@ def depth_potential_feature_cupy(
         direction = preconditioned + (new_rho / rho) * direction
         rho = new_rho
 
-    values_cpu = cp.asnumpy(solution)
+    values_cpu = np.asarray(solution) if cp is np else cp.asnumpy(solution)
     if return_raw:
         return np.ascontiguousarray(values_cpu, dtype=np.float64)
     tables = (
@@ -365,6 +512,7 @@ def depth_potential_feature_cupy(
         values_cpu,
         tables,
         float(fwhm),
+        array_module=cp,
     )
     minimum = float(np.min(smoothed))
     maximum = float(np.max(smoothed))

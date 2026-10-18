@@ -1,40 +1,48 @@
-"""基于官方 CAT 当前流程组装的球面 DARTEL 配准。"""
+"基于官方 CAT 当前流程组装的球面 DARTEL 配准。"
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
-import time
-from typing import Callable
-
-import numpy as np
-
-from .parameters import SurfWarpParameters
-from .dartel import _bilinear, dartel_symmetric_step, exponentiate_velocity
-from .features import (
+from cat_surface_gpu.parameters import SurfWarpParameters
+from cat_surface_gpu.dartel import (
+    _bilinear,
+    dartel_symmetric_step,
+    exponentiate_velocity,
+)
+from cat_surface_gpu.features import (
     _smoothing_parameters,
     build_smoothing_topology,
     depth_potential_feature_cupy,
     smooth_positions_cupy,
     type5_depth_feature_cupy,
 )
-from .mapping import apply_sphere_sheet_mapping, build_sphere_sheet_mapping
-from .io import GiftiSurface
-from .parameters import _positive_integer
-from .resampling import (
+from cat_surface_gpu.backends.cuda.tiled import enabled as cuda_optimized
+from cat_surface_gpu.geometry import (
+    apply_sphere_sheet_mapping,
+    build_sphere_sheet_mapping,
+)
+from cat_surface_gpu.resampling import (
     build_resampling_topology,
     prepare_spherical_resampler,
 )
-from .rotation import (
+from cat_surface_gpu.rotation import (
     RotationGridIndex,
     average_xz_sphere,
     rotate_vertices,
     rotation_matrix_from_angles,
 )
 
+from dataclasses import dataclass, replace
+from typing import Callable
+from .io import GiftiSurface
+from .parameters import _positive_integer
+import time
+
+import numpy as np
+
 
 @dataclass(frozen=True)
 class SurfWarpResult:
-    """保存注册球面、最终速度场和分阶段耗时。"""
+    "保存注册球面、最终速度场和分阶段耗时。"
 
     vertices: np.ndarray
     velocity: np.ndarray
@@ -79,16 +87,16 @@ def _validate_inputs(
 
 
 def _normalise_sphere(vertices: np.ndarray) -> np.ndarray:
-    """复现 CAT 入口的质心平移和逐点单位化。"""
+    "复现 CAT 入口的质心平移和逐点单位化。"
 
     points = np.ascontiguousarray(vertices, dtype=np.float32)
     if points.ndim != 2 or points.shape[1] != 3:
-        raise ValueError("球面顶点必须是 [N,3]")
+        raise ValueError("Sphere vertices must have shape [N,3]")
     centre = points.astype(np.float64).mean(axis=0)
     centered = np.asarray(points.astype(np.float64) - centre[None, :], dtype=np.float32)
     lengths = np.linalg.norm(centered.astype(np.float64), axis=1)
     if not np.isfinite(lengths).all() or np.any(lengths <= 0.0):
-        raise ValueError("球面存在无法单位化的顶点")
+        raise ValueError("Sphere contains vertices that cannot be normalized")
     normalized = np.asarray(
         centered.astype(np.float64) / lengths[:, None], dtype=np.float32
     )
@@ -106,27 +114,34 @@ def _initial_rotation_cupy(
     rotation_point_chunk: int,
     rotation_refine: bool,
     rotation_max_iter: int,
+    backend: str = "cupy",
 ) -> tuple[np.ndarray, float, int, int]:
-    """执行官方首轮 15/10 mm depth-potential 刚体旋转。"""
+    "执行官方首轮 15/10 mm depth-potential 刚体旋转。"
 
     started = time.perf_counter()
     source_sphere_vertices = _normalise_sphere(source_sphere_vertices)
     target_sphere_vertices = _normalise_sphere(target_sphere_vertices)
     source_topology = build_resampling_topology(
-        source_faces, len(source_sphere_vertices)
+        source_faces,
+        len(source_sphere_vertices),
+        binary_cache=backend == "cupy" and cuda_optimized(),
     )
     target_topology = build_resampling_topology(
-        target_faces, len(target_sphere_vertices)
+        target_faces,
+        len(target_sphere_vertices),
+        binary_cache=backend == "cupy" and cuda_optimized(),
     )
     source_resampler = prepare_spherical_resampler(
         source_sphere_vertices,
         source_faces,
         topology=source_topology,
+        backend=backend,
     )
     target_resampler = prepare_spherical_resampler(
         target_sphere_vertices,
         target_faces,
         topology=target_topology,
+        backend=backend,
     )
     resampled_source = source_resampler.apply(source_vertices)
     resampled_source_sphere = source_resampler.apply(source_sphere_vertices)
@@ -142,26 +157,68 @@ def _initial_rotation_cupy(
         resampled_source,
         topology,
         _smoothing_parameters(resampled_source, common_faces, 15.0)[0],
+        array_module=np if backend in ("cpu", "metal") else None,
     )
     smoothed_target = smooth_positions_cupy(
         resampled_target,
         topology,
         _smoothing_parameters(resampled_target, common_faces, 10.0)[0],
+        array_module=np if backend in ("cpu", "metal") else None,
     )
-    source_feature = depth_potential_feature_cupy(
-        smoothed_source, common_faces, 50.0, topology=topology
-    )
-    target_feature = depth_potential_feature_cupy(
-        smoothed_target, common_faces, 50.0, topology=topology
-    )
-    # 更细的空间网格把每个查询的候选面片数从约 120 降到约 45，
-    # 仅增加一次索引显存；显存不足时在下面自动回退到较粗网格。
-    rotation_grid_size = 256
-    # 大分块可显著减少每次代价评估的 CUDA kernel 启动；显存不足时逐级回退，
-    # 不改变候选角度、面片顺序或 Nelder--Mead 停止条件。
-    import cupy as cp
+    if backend == "metal" or (backend == "cupy" and cuda_optimized()):
+        from importlib import import_module
 
-    point_chunk = int(rotation_point_chunk)
+        feature_module = import_module(
+            f"cat_surface_gpu.backends.{'metal' if backend == 'metal' else 'cuda'}.features"
+        )
+        depth_potential_feature = feature_module.depth_potential_feature
+        from cat_surface_gpu.templates import target_features
+
+        source_feature = depth_potential_feature(
+            smoothed_source, common_faces, 50.0, topology=topology
+        )
+        (target_feature,) = target_features(
+            "depth",
+            smoothed_target,
+            common_faces,
+            [50.0],
+            lambda: [
+                depth_potential_feature(
+                    smoothed_target, common_faces, 50.0, topology=topology
+                )
+            ],
+            backend=backend,
+        )
+    else:
+        source_feature = depth_potential_feature_cupy(
+            smoothed_source,
+            common_faces,
+            50.0,
+            topology=topology,
+            array_module=np if backend in ("cpu", "metal") else None,
+        )
+        target_feature = depth_potential_feature_cupy(
+            smoothed_target,
+            common_faces,
+            50.0,
+            topology=topology,
+            array_module=np if backend in ("cpu", "metal") else None,
+        )
+    # 更细空间网格将每次查询候选面从约一百二十个减少至约四十五个，
+    # 代价是额外索引分配；内存不足时在下方缩小网格。
+    rotation_grid_size = 256
+    # 较大分块显著减少每次代价求值的 CUDA 核启动次数；内存不足时逐步缩小，
+    # 保持候选角度、面顺序与 Nelder–Mead 停止条件不变。
+    if backend in ("cpu", "metal"):
+        cp = np
+    else:
+        import cupy as cp
+
+    point_chunk = (
+        min(int(rotation_point_chunk), 64)
+        if backend in ("cpu", "metal")
+        else int(rotation_point_chunk)
+    )
     while True:
         try:
             rotation_index = RotationGridIndex.from_geometry(
@@ -176,9 +233,18 @@ def _initial_rotation_cupy(
                 point_chunk=point_chunk,
                 max_iter=rotation_max_iter,
                 refine=rotation_refine,
+                array_module=np
+                if backend in ("cpu", "metal") or cuda_optimized()
+                else None,
+                cuda_costs=backend == "cupy" and cuda_optimized(),
+                metal_costs=backend == "metal",
             )
             break
-        except cp.cuda.memory.OutOfMemoryError:
+        except Exception as error:
+            if backend in ("cpu", "metal") or not isinstance(
+                error, cp.cuda.memory.OutOfMemoryError
+            ):
+                raise
             if point_chunk > 2048:
                 point_chunk = max(2048, point_chunk // 2)
             elif rotation_grid_size > 128:
@@ -193,7 +259,7 @@ def _initial_rotation_cupy(
 
 
 def _point_to_uv(vertices: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """复现官方新坐标系的单位球点到 UV 变换。"""
+    "复现官方新坐标系的单位球点到 UV 变换。"
 
     points = np.asarray(vertices, dtype=np.float64)
     lengths = np.linalg.norm(points, axis=1)
@@ -210,11 +276,11 @@ def apply_deformation_to_sphere(
     *,
     inverse: bool = True,
 ) -> np.ndarray:
-    """复现 ``apply_warp(sphere, sphere, deformation)`` 的 UV 位移路径。"""
+    "复现 ``apply_warp(sphere, sphere, deformation)`` 的 UV 位移路径。"
 
     mapping = np.ascontiguousarray(deformation, dtype=np.float64)
     if mapping.ndim != 3 or mapping.shape[0] != 2:
-        raise ValueError("形变必须是 (2, H, W)")
+        raise ValueError("Deformation must have shape (2, H, W)")
     height, width = mapping.shape[1:]
     grid_y, grid_x = np.meshgrid(
         np.arange(1, height + 1, dtype=np.float64),
@@ -251,7 +317,7 @@ def apply_deformation_to_sphere(
         displacement_v + np.floor(-displacement_v),
         displacement_v,
     )
-    # 官方先把周期位移折回主区间，再乘球面面积权重；顺序不可交换。
+    # 上游先将周期位移折回主区间，再施加球面面积权重；不得调换顺序。
     displacement_u *= pole_weight
     displacement_v *= pole_weight
 
@@ -312,9 +378,10 @@ def surfwarp_single_run_cupy(
     target_mapping=None,
     target_feature_sheets=None,
     pcg_check_interval: int | None = 0,
+    backend: str = "cupy",
     progress: Callable[[str], None] | None = None,
 ) -> SurfWarpResult:
-    """组装一次官方 DARTEL run，可选执行官方初始刚体旋转。"""
+    """校验公开单次配准调用，再进入已验证的内部计算。"""
 
     _validate_inputs(
         source_vertices,
@@ -329,7 +396,70 @@ def surfwarp_single_run_cupy(
         rotation_max_iter,
         pcg_check_interval,
     )
-    import cupy as cp
+    return _surfwarp_single_run(
+        source_vertices,
+        source_sphere_vertices,
+        source_faces,
+        target_vertices,
+        target_sphere_vertices,
+        target_faces,
+        parameters,
+        solver_iterations=solver_iterations,
+        solver_backend=solver_backend,
+        rotation_point_chunk=rotation_point_chunk,
+        rotation_refine=rotation_refine,
+        rotation_max_iter=rotation_max_iter,
+        source_resampling_topology=source_resampling_topology,
+        target_resampling_topology=target_resampling_topology,
+        target_resampler=target_resampler,
+        smoothing_topology=smoothing_topology,
+        target_mapping=target_mapping,
+        target_feature_sheets=target_feature_sheets,
+        pcg_check_interval=pcg_check_interval,
+        backend=backend,
+        progress=progress,
+    )
+
+
+def _surfwarp_single_run(
+    source_vertices: np.ndarray,
+    source_sphere_vertices: np.ndarray,
+    source_faces: np.ndarray,
+    target_vertices: np.ndarray,
+    target_sphere_vertices: np.ndarray,
+    target_faces: np.ndarray,
+    parameters: SurfWarpParameters | None = None,
+    *,
+    solver_iterations: int = 40,
+    solver_backend: str = "pcg",
+    rotation_point_chunk: int = 16384,
+    rotation_refine: bool = True,
+    rotation_max_iter: int = 500,
+    source_resampling_topology=None,
+    target_resampling_topology=None,
+    target_resampler=None,
+    smoothing_topology=None,
+    target_mapping=None,
+    target_feature_sheets=None,
+    pcg_check_interval: int | None = 0,
+    backend: str = "cupy",
+    progress: Callable[[str], None] | None = None,
+) -> SurfWarpResult:
+    "组装一次官方 DARTEL run，可选执行官方初始刚体旋转。"
+
+    if backend not in ("cpu", "cupy", "metal"):
+        raise ValueError("backend must be cpu, cupy or metal")
+    if backend == "metal":
+        from .backends.metal.surf2sphere import _mlx
+
+        _mlx()
+        if solver_backend != "pcg" or pcg_check_interval != 0:
+            raise ValueError("Metal currently requires PCG with pcg_check_interval=0")
+
+    if backend in ("cpu", "metal"):
+        cp = np
+    else:
+        import cupy as cp
 
     options = (
         parameters
@@ -348,6 +478,8 @@ def surfwarp_single_run_cupy(
     working_source_sphere = _normalise_sphere(source_sphere_vertices)
     normalized_target_sphere = _normalise_sphere(target_sphere_vertices)
     if options.rotate:
+        if progress is not None:
+            progress("SurfWarp: initial rotation")
         (
             working_source_sphere,
             rotation_seconds,
@@ -363,6 +495,7 @@ def surfwarp_single_run_cupy(
             rotation_point_chunk=rotation_point_chunk,
             rotation_refine=rotation_refine,
             rotation_max_iter=rotation_max_iter,
+            backend=backend,
         )
         timings["initial_rotation"] = rotation_seconds
         timings["rotation_point_chunk"] = float(rotation_chunk_used)
@@ -372,23 +505,33 @@ def surfwarp_single_run_cupy(
     source_topology = (
         source_resampling_topology
         if source_resampling_topology is not None
-        else build_resampling_topology(source_faces, len(source_sphere_vertices))
+        else build_resampling_topology(
+            source_faces,
+            len(source_sphere_vertices),
+            binary_cache=backend == "cupy" and cuda_optimized(),
+        )
     )
     target_topology = (
         target_resampling_topology
         if target_resampling_topology is not None
-        else build_resampling_topology(target_faces, len(target_sphere_vertices))
+        else build_resampling_topology(
+            target_faces,
+            len(target_sphere_vertices),
+            binary_cache=backend == "cupy" and cuda_optimized(),
+        )
     )
     source_resampler = prepare_spherical_resampler(
         working_source_sphere,
         source_faces,
         topology=source_topology,
+        backend=backend,
     )
     if target_resampler is None:
         target_resampler = prepare_spherical_resampler(
             normalized_target_sphere,
             target_faces,
             topology=target_topology,
+            backend=backend,
         )
     resampled_source = source_resampler.apply(source_vertices)
     resampled_source_sphere = source_resampler.apply(working_source_sphere)
@@ -406,40 +549,83 @@ def surfwarp_single_run_cupy(
         )
 
     source_mapping = build_sphere_sheet_mapping(
-        resampled_source_sphere, common_faces, options.map_size
+        resampled_source_sphere,
+        common_faces,
+        options.map_size,
+        backend=backend,
     )
     if target_mapping is None:
         target_mapping = build_sphere_sheet_mapping(
-            resampled_target_sphere, common_faces, options.map_size
+            resampled_target_sphere,
+            common_faces,
+            options.map_size,
+            backend=backend,
         )
     mapped = time.perf_counter()
     timings["mapping_setup"] = mapped - prepared
 
     schedule = options.dartel_schedule()
-    # 目标函数标量先留在 GPU，循环结束后一次性取回，避免每个 DARTEL
-    # step 都触发 Python/CUDA 同步。
+    # 目标标量保留在 GPU，循环结束后一次取回，避免每次 DARTEL 更新
+    # 在 Python 与 CUDA 之间同步。
     objective_scalars = []
     solver_steps_used: list[int] = []
     velocity = None
     feature_seconds = 0.0
     dartel_seconds = 0.0
+    source_feature_scales = target_feature_scales = None
+    if backend == "metal" or (backend == "cupy" and cuda_optimized()):
+        from importlib import import_module
+
+        feature_module = import_module(
+            f"cat_surface_gpu.backends.{'metal' if backend == 'metal' else 'cuda'}.features"
+        )
+        type5_depth_features = feature_module.type5_depth_features
+        from cat_surface_gpu.templates import target_features
+
+        feature_started = time.perf_counter()
+        scales = [options.curvature_fwhm / (3.0**step) for step in range(options.steps)]
+        source_feature_scales = type5_depth_features(
+            resampled_source, common_faces, scales, smoothing_topology
+        )
+        if target_feature_sheets is None:
+            target_feature_scales = target_features(
+                "type5",
+                resampled_target,
+                common_faces,
+                scales,
+                lambda: type5_depth_features(
+                    resampled_target, common_faces, scales, smoothing_topology
+                ),
+                backend=backend,
+            )
+        feature_seconds += time.perf_counter() - feature_started
     for step in range(options.steps):
         if progress is not None:
             progress(f"SurfWarp: feature and DARTEL step {step + 1}/{options.steps}")
         feature_started = time.perf_counter()
         fwhm = options.curvature_fwhm / (3.0**step)
-        source_values = type5_depth_feature_cupy(
-            resampled_source,
-            common_faces,
-            fwhm,
-            topology=smoothing_topology,
-        )
-        if target_feature_sheets is None:
-            target_values = type5_depth_feature_cupy(
-                resampled_target,
+        source_values = (
+            source_feature_scales[step]
+            if source_feature_scales is not None
+            else type5_depth_feature_cupy(
+                resampled_source,
                 common_faces,
                 fwhm,
                 topology=smoothing_topology,
+                array_module=np if backend in ("cpu", "metal") else None,
+            )
+        )
+        if target_feature_sheets is None:
+            target_values = (
+                target_feature_scales[step]
+                if target_feature_scales is not None
+                else type5_depth_feature_cupy(
+                    resampled_target,
+                    common_faces,
+                    fwhm,
+                    topology=smoothing_topology,
+                    array_module=np if backend in ("cpu", "metal") else None,
+                )
             )
             target_sheet = apply_sphere_sheet_mapping(target_mapping, target_values)
         else:
@@ -449,7 +635,7 @@ def surfwarp_single_run_cupy(
         source_sheet = apply_sphere_sheet_mapping(source_mapping, source_values)
         feature_seconds += time.perf_counter() - feature_started
 
-        # 官方当前单层实现会在每个 step 重新把 inflow 清零。
+        # 当前上游单层实现在每个阶段清空初始流场。
         velocity = cp.zeros(
             (2, source_sheet.shape[0], source_sheet.shape[1]),
             dtype=cp.float64,
@@ -457,28 +643,58 @@ def surfwarp_single_run_cupy(
         source_gpu = cp.asarray(source_sheet, dtype=cp.float64)
         target_gpu = cp.asarray(target_sheet, dtype=cp.float64)
         dartel_started = time.perf_counter()
-        for item in schedule:
-            for _ in range(int(item["iterations"])):
-                velocity, diagnostics = dartel_symmetric_step(
-                    velocity,
-                    source_gpu,
-                    target_gpu,
-                    time_step=int(item["time_step"]),
-                    mu=float(item["mu"]),
-                    lm_regularization=float(item["lmreg"]),
-                    solver_iterations=solver_iterations,
-                    solver_backend=solver_backend,
-                    collect_diagnostics=False,
-                    pcg_check_interval=pcg_check_interval,
-                )
-                objective_scalars.append(diagnostics["objective"])
-                solver_steps_used.append(int(diagnostics["solver_iterations"]))
-        cp.cuda.get_current_stream().synchronize()
+        if backend == "metal":
+            from .backends.metal.warp import run_schedule
+
+            velocity, values = run_schedule(
+                source_sheet, target_sheet, schedule, solver_iterations
+            )
+            objective_scalars.extend(values)
+            solver_steps_used.extend([solver_iterations] * len(values))
+        elif (
+            backend == "cupy"
+            and cuda_optimized()
+            and solver_backend == "pcg"
+            and pcg_check_interval == 0
+        ):
+            from cat_surface_gpu.backends.cuda.warp import run_schedule
+
+            velocity, values = run_schedule(
+                source_sheet, target_sheet, schedule, solver_iterations
+            )
+            objective_scalars.extend(values)
+            solver_steps_used.extend([solver_iterations] * len(values))
+        else:
+            for item in schedule:
+                for _ in range(int(item["iterations"])):
+                    velocity, diagnostics = dartel_symmetric_step(
+                        velocity,
+                        source_gpu,
+                        target_gpu,
+                        time_step=int(item["time_step"]),
+                        mu=float(item["mu"]),
+                        lm_regularization=float(item["lmreg"]),
+                        solver_iterations=solver_iterations,
+                        solver_backend=solver_backend,
+                        collect_diagnostics=False,
+                        pcg_check_interval=pcg_check_interval,
+                    )
+                    objective_scalars.append(diagnostics["objective"])
+                    solver_steps_used.append(int(diagnostics["solver_iterations"]))
+        if backend == "cupy":
+            cp.cuda.get_current_stream().synchronize()
         dartel_seconds += time.perf_counter() - dartel_started
     timings["features_and_sheet"] = feature_seconds
     timings["dartel"] = dartel_seconds
     objectives = (
-        [float(value) for value in cp.asnumpy(cp.stack(objective_scalars))]
+        [
+            float(value)
+            for value in (
+                np.stack(objective_scalars)
+                if backend in ("cpu", "metal")
+                else cp.asnumpy(cp.stack(objective_scalars))
+            )
+        ]
         if objective_scalars
         else []
     )
@@ -490,8 +706,13 @@ def surfwarp_single_run_cupy(
         raise RuntimeError("没有执行 DARTEL step")
     exponent_started = time.perf_counter()
     deformation_gpu, _ = exponentiate_velocity(velocity, 10)
-    deformation = cp.asnumpy(deformation_gpu)
-    cp.cuda.get_current_stream().synchronize()
+    deformation = (
+        np.asarray(deformation_gpu)
+        if backend in ("cpu", "metal")
+        else cp.asnumpy(deformation_gpu)
+    )
+    if backend == "cupy":
+        cp.cuda.get_current_stream().synchronize()
     timings["exponentiation"] = time.perf_counter() - exponent_started
     apply_started = time.perf_counter()
     registered = apply_deformation_to_sphere(
@@ -502,7 +723,9 @@ def surfwarp_single_run_cupy(
     GiftiSurface(registered, source_faces)
     return SurfWarpResult(
         vertices=registered,
-        velocity=cp.asnumpy(velocity),
+        velocity=np.asarray(velocity)
+        if backend in ("cpu", "metal")
+        else cp.asnumpy(velocity),
         deformation=deformation,
         timings=timings,
         objectives=tuple(objectives),
@@ -524,11 +747,11 @@ def surfwarp_cupy(
     rotation_refine: bool = True,
     rotation_max_iter: int = 500,
     pcg_check_interval: int | None = 0,
+    backend: str = "cupy",
     progress: Callable[[str], None] | None = None,
 ) -> SurfWarpResult:
-    """执行官方初始旋转、多个 runs 以及极点平均状态机。"""
+    "执行官方初始旋转、多个 runs 以及极点平均状态机。"
 
-    options = parameters if parameters is not None else SurfWarpParameters()
     _validate_inputs(
         source_vertices,
         source_sphere_vertices,
@@ -542,6 +765,16 @@ def surfwarp_cupy(
         rotation_max_iter,
         pcg_check_interval,
     )
+    if backend not in ("cpu", "cupy", "metal"):
+        raise ValueError("backend must be cpu, cupy or metal")
+    if backend == "metal":
+        from .backends.metal.surf2sphere import _mlx
+
+        _mlx()
+        if solver_backend != "pcg" or pcg_check_interval != 0:
+            raise ValueError("Metal currently requires PCG with pcg_check_interval=0")
+
+    options = parameters if parameters is not None else SurfWarpParameters()
     if options.multires_levels != 0:
         raise NotImplementedError("当前完整入口尚未实现 multires")
     if any(kind != 5 for kind in options.curvature_types[: options.steps]):
@@ -572,24 +805,30 @@ def surfwarp_cupy(
             rotation_point_chunk=rotation_point_chunk,
             rotation_refine=rotation_refine,
             rotation_max_iter=rotation_max_iter,
+            backend=backend,
         )
         timings["rotation_point_chunk"] = float(rotation_chunk_used)
         timings["rotation_grid_size"] = float(rotation_grid_used)
     else:
         timings["initial_rotation"] = 0.0
 
-    # 两次主 run 共用目标球的重采样、平滑拓扑和 sheet mapping；平均极点的
-    # 旋转 run 仍单独建立几何相关的 target 状态。
+    # 两次主配准共享目标球重采样、平滑拓扑和二维映射；平均极点的
+    # 旋转配准仍构建自己的几何相关目标状态。
     shared_source_topology = build_resampling_topology(
-        source_faces, len(source_sphere_vertices)
+        source_faces,
+        len(source_sphere_vertices),
+        binary_cache=backend == "cupy" and cuda_optimized(),
     )
     shared_target_topology = build_resampling_topology(
-        target_faces, len(target_sphere_vertices)
+        target_faces,
+        len(target_sphere_vertices),
+        binary_cache=backend == "cupy" and cuda_optimized(),
     )
     shared_target_resampler = prepare_spherical_resampler(
         normalized_target_sphere,
         target_faces,
         topology=shared_target_topology,
+        backend=backend,
     )
     shared_common_faces = shared_target_resampler.target_faces
     shared_smoothing_topology = build_smoothing_topology(
@@ -599,18 +838,48 @@ def surfwarp_cupy(
         shared_target_resampler.apply(normalized_target_sphere),
         shared_common_faces,
         options.map_size,
+        backend=backend,
     )
     target_feature_started = time.perf_counter()
-    if progress is not None:
-        progress("SurfWarp: target features")
     target_feature_sheets = []
     resampled_target_for_features = shared_target_resampler.apply(target_vertices)
-    for step in range(options.steps):
-        target_values = type5_depth_feature_cupy(
+    cached_target_scales = None
+    if backend == "metal" or (backend == "cupy" and cuda_optimized()):
+        from importlib import import_module
+
+        feature_module = import_module(
+            f"cat_surface_gpu.backends.{'metal' if backend == 'metal' else 'cuda'}.features"
+        )
+        type5_depth_features = feature_module.type5_depth_features
+        from cat_surface_gpu.templates import target_features
+
+        scales = [options.curvature_fwhm / (3.0**step) for step in range(options.steps)]
+        cached_target_scales = target_features(
+            "type5",
             resampled_target_for_features,
             shared_common_faces,
-            options.curvature_fwhm / (3.0**step),
-            topology=shared_smoothing_topology,
+            scales,
+            lambda: type5_depth_features(
+                resampled_target_for_features,
+                shared_common_faces,
+                scales,
+                shared_smoothing_topology,
+            ),
+            backend=backend,
+        )
+    for step in range(options.steps):
+        if progress is not None:
+            progress(f"SurfWarp: feature and DARTEL step {step + 1}/{options.steps}")
+        target_values = (
+            cached_target_scales[step]
+            if cached_target_scales is not None
+            else type5_depth_feature_cupy(
+                resampled_target_for_features,
+                shared_common_faces,
+                options.curvature_fwhm / (3.0**step),
+                topology=shared_smoothing_topology,
+                array_module=np if backend in ("cpu", "metal") else None,
+            )
         )
         target_feature_sheets.append(
             apply_sphere_sheet_mapping(shared_target_mapping, target_values)
@@ -622,7 +891,7 @@ def surfwarp_cupy(
         if progress is not None:
             progress(f"SurfWarp: run {run_index + 1}/{options.runs}")
         sphere_before_run = working_source_sphere
-        run_result = surfwarp_single_run_cupy(
+        run_result = _surfwarp_single_run(
             source_vertices,
             sphere_before_run,
             source_faces,
@@ -642,7 +911,7 @@ def surfwarp_cupy(
             target_mapping=shared_target_mapping,
             target_feature_sheets=target_feature_sheets,
             pcg_check_interval=pcg_check_interval,
-            progress=progress,
+            backend=backend,
         )
         last_result = run_result
         objectives.extend(run_result.objectives)
@@ -650,8 +919,6 @@ def surfwarp_cupy(
             timings[f"run{run_index + 1}_{name}"] = float(value)
 
         if options.average and run_index == options.runs - 1:
-            if progress is not None:
-                progress("SurfWarp: pole averaging")
             plus_matrix = rotation_matrix_from_angles(
                 np.asarray((0.0, np.pi / 2.0, 0.0), dtype=np.float64)
             )
@@ -665,7 +932,7 @@ def surfwarp_cupy(
                 normalized_target_sphere, plus_matrix
             )
             average_started = time.perf_counter()
-            rotated_result = surfwarp_single_run_cupy(
+            rotated_result = _surfwarp_single_run(
                 rotated_source,
                 rotated_source_sphere,
                 source_faces,
@@ -682,6 +949,7 @@ def surfwarp_cupy(
                 target_resampling_topology=shared_target_topology,
                 smoothing_topology=shared_smoothing_topology,
                 pcg_check_interval=pcg_check_interval,
+                backend=backend,
             )
             rotated_back = rotate_vertices(rotated_result.vertices, minus_matrix)
             averaged = average_xz_sphere(run_result.vertices, rotated_back)

@@ -2,7 +2,7 @@
 
 # CAT-Surface GPU
 
-GPU-accelerated `CAT_Surf2Sphere` and `CAT_SurfWarp` surface registration, implemented in Python and CuPy.
+Python implementations of `CAT_Surf2Sphere` and `CAT_SurfWarp` for CPU, CUDA and Metal.
 
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/ayakacxy/cat-surface-gpu?display_name=tag&sort=semver)](https://github.com/ayakacxy/cat-surface-gpu/releases/latest)
@@ -10,9 +10,9 @@ GPU-accelerated `CAT_Surf2Sphere` and `CAT_SurfWarp` surface registration, imple
 [![CodeQL](https://github.com/ayakacxy/cat-surface-gpu/actions/workflows/codeql.yml/badge.svg)](https://github.com/ayakacxy/cat-surface-gpu/actions/workflows/codeql.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB.svg?logo=python&logoColor=white)](pyproject.toml)
 [![CUDA 12.6 tested](https://img.shields.io/badge/CUDA-12.6-76B900.svg?logo=nvidia&logoColor=white)](docs/RELEASE_v0.2.0.md)
-[![Linux x86-64](https://img.shields.io/badge/platform-Linux%20x86--64-lightgrey.svg)](docs/IMPLEMENTATION.md)
+[![Linux / Windows / macOS](https://img.shields.io/badge/platform-Linux%20%7C%20Windows%20%7C%20macOS-lightgrey.svg)](docs/IMPLEMENTATION.md)
 
-[简体中文](README.zh-CN.md) · [Documentation](docs/README.md) · [Benchmarks](docs/BENCHMARKS_v0.2.0.md) · [Build from source](docs/BUILDING.md) · [Upstream credits](THIRD_PARTY_NOTICES.md)
+[简体中文](README.zh-CN.md) · [Documentation](docs/README.md) · [Benchmarks](docs/RELEASE_v0.3.0.md) · [Build from source](docs/BUILDING.md) · [Upstream credits](THIRD_PARTY_NOTICES.md)
 
 ⚡ **GPU-accelerated** · 🧠 **Surface registration** · 🧪 **CUDA-tested** · 📦 **Python package**
 
@@ -23,9 +23,22 @@ CAT-Surface GPU provides two components for the cortical-surface registration wo
 - `CAT_Surf2Sphere`: cortical surface inflation and projection onto a sphere.
 - `CAT_SurfWarp`: depth features, initial rotation, spherical resampling, DARTEL registration, averaging, and registered-sphere output.
 
-Version **0.2.0** implements these operations in Python, using NumPy/Numba for CPU work and CuPy for CUDA kernels. It does not call CAT executables or load project-specific C/Cython extensions. Numba and CuPy still compile kernels at runtime, and the full workflow requires an NVIDIA GPU. PyTorch and Triton are no longer dependencies.
+**v0.3.0** supports spherical inflation and registration with CuPy CUDA on Linux and Windows, MLX Metal on Apple Silicon macOS, and NumPy/Numba CPU execution on all three platforms. CUDA uses tiled smoothing, FP32 feature solves and DARTEL; final exponentiation remains FP64.
 
-## ⚡ Validation and performance
+See the [v0.3.0 release notes](docs/RELEASE_v0.3.0.md) for installation, backend options, benchmarks and numerical comparisons.
+
+## ⚡ v0.3.0 performance
+
+Measured on RTX 2080 Ti, Xeon Gold 6230, Python 3.11 and 8 threads, using identical 163,842-vertex fsaverage inputs and 40 PCG iterations. These are medians of three interleaved fresh-process runs, including input reading, validation, populated-cache loading, computation and compressed output. Each number is for one surface.
+
+| Complete command | v0.2.0 | v0.3.0 | Speedup |
+| --- | ---: | ---: | ---: |
+| Surf2Sphere | 7.968 s | 2.612 s | 3.05× |
+| SurfWarp | 20.479 s | 4.983 s | 4.11× |
+
+The bilateral CAT workflow takes **9.731 seconds** with preloaded inputs and all four compressed files written; internal calculation timers total **5.771 seconds**. See [v0.3.0 notes](docs/RELEASE_v0.3.0.md) for mesh sizes, fixture provenance, first calls and numerical comparisons.
+
+## ⚡ Historical v0.2.0 validation and performance
 
 Measured on an NVIDIA GeForce RTX 2080 Ti with Python 3.11 and CUDA 12.6. Each v0.2.0 input has 163,842 vertices and 327,680 triangles:
 
@@ -60,13 +73,15 @@ The v0.1.0 bilateral CAT registration chain took **55.2573 s** on that setup. It
 
 ## 🧩 Requirements
 
-- Linux x86-64, the tested platform
-- NVIDIA GPU with a driver compatible with the installed CuPy package
+- Linux, Windows, or Apple Silicon macOS
+- CUDA: NVIDIA GPU and a matching CuPy/driver; Metal: Apple GPU and MLX
 - Python 3.11 or newer
 - NumPy, SciPy, Numba, and nibabel
 - CuPy for the complete CUDA workflow
 
 The `cuda` extra installs `cupy-cuda12x` for CUDA 12.x. Other CUDA configurations require a matching CuPy package. The wheel uses `py3-none-any` because it contains no compiled project extension; the GPU workflow still needs the runtime above.
+
+Install CPU support with `python -m pip install .`, Mac Metal with `python -m pip install ".[metal]"`, or Linux/Windows CUDA 12 with `python -m pip install ".[cuda]"`. Both commands accept `--device cpu`, `--device metal`, `--device cuda` and `--device auto`. An unavailable explicitly requested backend raises an error. The examples below use CUDA.
 
 <a id="install"></a>
 
@@ -77,7 +92,6 @@ Clone the repository, set local cache directories, and create an environment:
 ```bash
 git clone https://github.com/ayakacxy/cat-surface-gpu.git
 cd cat-surface-gpu
-git checkout v0.2.0
 
 mkdir -p .work/setup/{tmp,cache/pip,cache/conda,cache/numba,cache/cupy}
 export TMPDIR="$PWD/.work/setup/tmp" TMP="$PWD/.work/setup/tmp" TEMP="$PWD/.work/setup/tmp"
@@ -108,7 +122,7 @@ PY
 python -m pytest -q --basetemp .work/setup/tmp/pytest
 ```
 
-CPU tests can run without a GPU. CUDA tests are skipped when no usable device is available; a skip does not establish GPU correctness.
+CPU tests require no GPU. CUDA tests require an NVIDIA GPU; Metal tests require Apple Silicon macOS. Tests for unavailable backends are skipped.
 
 <a id="run"></a>
 
@@ -159,23 +173,24 @@ cat-surfwarp-gpu \
   --threads 8
 ```
 
-Each anatomical surface must share vertex ordering and triangles with its corresponding sphere. The source and template may use different meshes. Both commands return an error if CUDA is unavailable. Use `--help` for the full option list.
+Each anatomical surface must share vertex ordering and triangles with its corresponding sphere. The source and template may use different meshes. An explicitly requested unavailable backend raises an error. Use `--help` for the full option list.
 
 ## 📦 Python package
 
 | Version | Implementation | CAT-Surface reference |
 | --- | --- | --- |
+| [v0.3.0](docs/RELEASE_v0.3.0.md) | CPU, CUDA and Metal; tiled smoothing, FP32 registration and topology reuse | `b0c2aa23` |
 | [v0.2.0](docs/RELEASE_v0.2.0.md) | Python, NumPy/Numba, and CuPy; no bundled CAT programs | [`b0c2aa23`](https://github.com/ChristianGaser/CAT-Surface/tree/b0c2aa2395ea4957a331b9444fb54c7716b6572d) |
 | [v0.1.0](docs/RELEASE_v0.1.0.md) | PyTorch/Triton with bundled CPU reference and helper programs | [`628b6851`](https://github.com/ChristianGaser/CAT-Surface/tree/628b6851d8638f3ab773cd25c0ec406d0ec61ede) |
 
-The v0.2.0 wheel contains the Python implementation and inline CUDA kernel source. It does not include anatomical data or templates. The release also provides a source archive, the pinned CAT-Surface source archive, a dependency inventory, and checksums.
+The v0.3.0 wheel contains the Python implementation and inline CUDA and Metal kernel source. It does not include anatomical data or templates. The release also provides a source archive, the pinned CAT-Surface source archive, a dependency inventory, and checksums.
 
-The two main commands are retained, but backend options and Python APIs changed. See [MIGRATION.md](docs/MIGRATION.md) when upgrading from v0.1.0.
+v0.3.0 retains the v0.2.0 commands and CUDA APIs and adds CPU and Metal backends. See [MIGRATION.md](docs/MIGRATION.md) for version-specific upgrade steps.
 
 ## 🎯 Numerical checks and Python API
 
 - Triangle arrays retain their source indexing.
-- Default registration uses double-precision DARTEL with 40 PCG iterations per linear solve.
+- CUDA/Metal use FP32 DARTEL with 40 PCG iterations per linear solve; CPU and final exponentiation use FP64.
 - PCG follows a different numerical path from upstream FMG; comparisons must record the solver and reference revision.
 - The supported registration path uses type-5 features for one or two steps. See [IMPLEMENTATION.md](docs/IMPLEMENTATION.md) for available settings.
 - The v0.1.0 numerical thresholds should not be assumed to apply to v0.2.0.
@@ -188,12 +203,12 @@ from cat_surface_gpu import (
     Surf2SphereParameters,
     load_gifti_surface,
     save_gifti_surface,
-    surf_to_sphere_cupy,
+    surf_to_sphere,
 )
 
 surface = load_gifti_surface("white.gii")
-sphere_vertices, timings = surf_to_sphere_cupy(
-    surface.vertices, surface.faces, Surf2SphereParameters(stop_at=10)
+sphere_vertices, timings = surf_to_sphere(
+    surface.vertices, surface.faces, Surf2SphereParameters(stop_at=10), device="cuda"
 )
 save_gifti_surface(
     GiftiSurface(sphere_vertices, surface.faces, surface.reference),
@@ -206,10 +221,10 @@ save_gifti_surface(
 ## 🗂️ Repository layout
 
 ```text
-src/cat_surface_gpu/          Python API, CLI, geometry, and CUDA kernels
+src/cat_surface_gpu/          Python API, CLI, and CPU/CUDA/Metal backends
 tools/                        Synthetic GIFTI fixture generator
 scripts/                      Build and release-verification tools
-tests/                        CPU and CUDA tests
+tests/                        CPU, CUDA and Metal tests
 upstream/                     Source records and upstream license
 docs/                         Usage, validation, benchmarks, and release notes
 ```

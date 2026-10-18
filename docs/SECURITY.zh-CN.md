@@ -14,4 +14,4 @@
 
 ## 范围
 
-本软件包读取 GIFTI 表面，并使用 NumPy、Numba、nibabel 和 CuPy 处理。v0.2.0 不附带 CAT 可执行程序。项目不收集遥测信息，也不上传输入数据。
+本软件包通过 nibabel 读取 GIFTI 表面，使用 NumPy/Numba、CuPy CUDA 或 MLX Metal 进行计算。v0.2.0 和 v0.3.0 均不附带 CAT 可执行程序。项目不收集遥测信息，也不上传输入数据。

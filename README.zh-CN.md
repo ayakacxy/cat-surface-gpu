@@ -2,7 +2,7 @@
 
 # CAT-Surface GPU
 
-面向 `CAT_Surf2Sphere` 与 `CAT_SurfWarp` 曲面配准的 GPU 加速实现，使用 Python 和 CuPy。
+面向 `CAT_Surf2Sphere` 与 `CAT_SurfWarp` 的 Python 实现，支持 CPU、CUDA 和 Metal。
 
 [![许可证：GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
 [![正式版本](https://img.shields.io/github/v/release/ayakacxy/cat-surface-gpu?display_name=tag&sort=semver)](https://github.com/ayakacxy/cat-surface-gpu/releases/latest)
@@ -10,9 +10,9 @@
 [![CodeQL](https://github.com/ayakacxy/cat-surface-gpu/actions/workflows/codeql.yml/badge.svg)](https://github.com/ayakacxy/cat-surface-gpu/actions/workflows/codeql.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB.svg?logo=python&logoColor=white)](pyproject.toml)
 [![已测试 CUDA 12.6](https://img.shields.io/badge/CUDA-12.6-76B900.svg?logo=nvidia&logoColor=white)](docs/RELEASE_v0.2.0.zh-CN.md)
-[![Linux x86-64](https://img.shields.io/badge/platform-Linux%20x86--64-lightgrey.svg)](docs/IMPLEMENTATION.zh-CN.md)
+[![Linux / Windows / macOS](https://img.shields.io/badge/platform-Linux%20%7C%20Windows%20%7C%20macOS-lightgrey.svg)](docs/IMPLEMENTATION.zh-CN.md)
 
-[English](README.md) · [文档目录](docs/README.zh-CN.md) · [详细性能报告](docs/BENCHMARKS_v0.2.0.zh-CN.md) · [源码构建](docs/BUILDING.zh-CN.md) · [上游致谢](THIRD_PARTY_NOTICES.zh-CN.md)
+[English](README.md) · [文档目录](docs/README.zh-CN.md) · [详细性能报告](docs/RELEASE_v0.3.0.zh-CN.md) · [源码构建](docs/BUILDING.zh-CN.md) · [上游致谢](THIRD_PARTY_NOTICES.zh-CN.md)
 
 ⚡ **GPU 加速** · 🧠 **曲面配准** · 🧪 **CUDA 实测** · 📦 **Python 软件包**
 
@@ -23,9 +23,22 @@
 - `CAT_Surf2Sphere`：皮层曲面膨胀与球面投影。
 - `CAT_SurfWarp`：深度特征、初始旋转、球面重采样、DARTEL 配准、平均以及配准球面输出。
 
-**0.2.0** 采用原生 Python 实现，使用 NumPy/Numba 完成 CPU 计算，使用 CuPy 执行 CUDA kernel。这里的“原生 Python”是指不再调用 CAT 外部程序，也不加载本项目专用的 C/Cython 扩展；Numba 和 CuPy 仍会在运行时编译计算内核，完整流程需要 NVIDIA GPU。PyTorch 和 Triton 已不再是依赖。
+**v0.3.0** 支持在 Linux 和 Windows 上使用 CuPy CUDA、在 Apple Silicon macOS 上使用 MLX Metal 完成球面生成与配准，三个平台均支持 NumPy/Numba CPU 计算。CUDA 默认使用分块平滑、FP32 特征求解及 DARTEL；最终指数映射保持 FP64。
 
-## ⚡ 验证与性能概览
+安装方法、后端选项、性能测试和数值对比见 [v0.3.0 版本说明](docs/RELEASE_v0.3.0.zh-CN.md)。
+
+## ⚡ v0.3.0 性能
+
+在 RTX 2080 Ti、Xeon Gold 6230、Python 3.11、8 线程上，使用同一组 163,842 顶点 fsaverage 输入，PCG 固定 40 次。以下为三次交错运行的中位数，计时从新进程启动到退出，包含输入读取、验证、已有缓存加载、计算和压缩写出。每个数值对应单份表面。
+
+| 完整命令 | v0.2.0 | v0.3.0 | 提速 |
+| --- | ---: | ---: | ---: |
+| Surf2Sphere | 7.968 s | 2.612 s | 3.05× |
+| SurfWarp | 20.479 s | 4.983 s | 4.11× |
+
+双半球 CAT 流程（预加载输入、四个压缩文件全部写完）为 **9.731 秒**，其中内部计算计时合计 **5.771 秒**。网格规模、输入来源、首次调用和数值对比见 [v0.3.0 说明](docs/RELEASE_v0.3.0.zh-CN.md)。
+
+## ⚡ v0.2.0 历史验证与性能
 
 在 NVIDIA GeForce RTX 2080 Ti、Python 3.11 和 CUDA 12.6 环境测量，每份 v0.2.0 输入包含 163,842 个顶点、327,680 个三角形：
 
@@ -60,13 +73,15 @@
 
 ## 🧩 环境要求
 
-- Linux x86-64，为当前测试平台
+- Linux、Windows 或 Apple Silicon macOS
 - NVIDIA GPU，以及与所安装 CuPy 包兼容的驱动
 - Python 3.11 或更新版本
 - NumPy、SciPy、Numba 和 nibabel
 - 完整 CUDA 流程所需的 CuPy
 
 `cuda` 可选依赖安装面向 CUDA 12.x 的 `cupy-cuda12x`；其他 CUDA 环境需安装对应的 CuPy 包。wheel 使用 `py3-none-any` 标记，表示本项目没有随包编译扩展，GPU 计算仍需满足以上运行条件。
+
+CPU 安装使用 `python -m pip install .`；Mac Metal 使用 `python -m pip install ".[metal]"`；Linux/Windows CUDA 12 使用 `python -m pip install ".[cuda]"`。两条命令都接受 `--device cpu`、`--device metal`、`--device cuda` 和 `--device auto`。显式后端不可用时直接报错。下方是 CUDA 示例。
 
 <a id="install"></a>
 
@@ -77,7 +92,6 @@
 ```bash
 git clone https://github.com/ayakacxy/cat-surface-gpu.git
 cd cat-surface-gpu
-git checkout v0.2.0
 
 mkdir -p .work/setup/{tmp,cache/pip,cache/conda,cache/numba,cache/cupy}
 export TMPDIR="$PWD/.work/setup/tmp" TMP="$PWD/.work/setup/tmp" TEMP="$PWD/.work/setup/tmp"
@@ -108,7 +122,7 @@ PY
 python -m pytest -q --basetemp .work/setup/tmp/pytest
 ```
 
-没有 GPU 时可以运行 CPU 测试，CUDA 测试会跳过；跳过不表示 GPU 结果已经验证。
+CPU 测试无需 GPU。CUDA 测试需要 NVIDIA GPU，Metal 测试需要 Apple Silicon macOS；环境不满足时，对应测试会跳过。
 
 <a id="run"></a>
 
@@ -159,23 +173,24 @@ cat-surfwarp-gpu \
   --threads 8
 ```
 
-每个解剖曲面及其对应球面必须具有相同的顶点顺序和三角面；个体与模板之间可以采用不同网格。两个命令在 CUDA 不可用时均直接报错，完整参数见 `--help`。
+每个解剖曲面及其对应球面必须具有相同的顶点顺序和三角面；个体与模板之间可以采用不同网格。显式指定的后端不可用时，命令直接报错，完整参数见 `--help`。
 
 ## 📦 Python 软件包
 
 | 版本 | 实现方式 | CAT-Surface 参考版本 |
 | --- | --- | --- |
+| [v0.3.0](docs/RELEASE_v0.3.0.zh-CN.md) | CPU、CUDA 和 Metal；分块平滑、FP32 配准及固定拓扑复用 | `b0c2aa23` |
 | [v0.2.0](docs/RELEASE_v0.2.0.zh-CN.md) | Python、NumPy/Numba 和 CuPy，不附带 CAT 可执行文件 | [`b0c2aa23`](https://github.com/ChristianGaser/CAT-Surface/tree/b0c2aa2395ea4957a331b9444fb54c7716b6572d) |
 | [v0.1.0](docs/RELEASE_v0.1.0.zh-CN.md) | PyTorch/Triton，配合随包发布的 CPU 参考程序和辅助程序 | [`628b6851`](https://github.com/ChristianGaser/CAT-Surface/tree/628b6851d8638f3ab773cd25c0ec406d0ec61ede) |
 
-v0.2.0 wheel 包含 Python 实现和内嵌 CUDA 内核源码，不包含解剖数据或模板。发行文件另提供项目源码包、固定版本的 CAT-Surface 源码包、依赖清单和校验文件。
+v0.3.0 wheel 包含 Python 实现和内嵌 CUDA、Metal 内核源码，不包含解剖数据或模板。发行文件另提供项目源码包、固定版本的 CAT-Surface 源码包、依赖清单和校验文件。
 
-两个主要命令名称保留，后端选项和 Python 接口已有调整。从 v0.1.0 升级时请参考[迁移说明](docs/MIGRATION.zh-CN.md)。
+v0.3.0 保留 v0.2.0 的命令与 CUDA 接口，并新增 CPU 和 Metal 后端。各版本的升级步骤见[迁移说明](docs/MIGRATION.zh-CN.md)。
 
 ## 🎯 数值检查与 Python 接口
 
 - 三角面数组保留源网格的索引。
-- 默认配准使用双精度 DARTEL，每次线性求解执行 40 次 PCG 迭代。
+- CUDA/Metal 使用 FP32 DARTEL，每次线性求解执行 40 次 PCG；CPU 和最终指数映射使用 FP64。
 - PCG 与上游 FMG 的计算过程不同，比较结果时需记录求解器和参考版本。
 - 当前配准支持使用 type-5 特征的一步或两步流程，具体设置见[实现说明](docs/IMPLEMENTATION.zh-CN.md)。
 - v0.1.0 使用的误差阈值不能直接套用到 v0.2.0。
@@ -188,12 +203,12 @@ from cat_surface_gpu import (
     Surf2SphereParameters,
     load_gifti_surface,
     save_gifti_surface,
-    surf_to_sphere_cupy,
+    surf_to_sphere,
 )
 
 surface = load_gifti_surface("white.gii")
-sphere_vertices, timings = surf_to_sphere_cupy(
-    surface.vertices, surface.faces, Surf2SphereParameters(stop_at=10)
+sphere_vertices, timings = surf_to_sphere(
+    surface.vertices, surface.faces, Surf2SphereParameters(stop_at=10), device="cuda"
 )
 save_gifti_surface(
     GiftiSurface(sphere_vertices, surface.faces, surface.reference),
@@ -206,10 +221,10 @@ save_gifti_surface(
 ## 🗂️ 仓库结构
 
 ```text
-src/cat_surface_gpu/          Python 接口、命令、几何计算和 CUDA 内核
+src/cat_surface_gpu/          Python 接口、命令及 CPU/CUDA/Metal 后端
 tools/                        合成 GIFTI 测试数据生成器
 scripts/                      构建与发行检查工具
-tests/                        CPU 和 CUDA 测试
+tests/                        CPU、CUDA 和 Metal 测试
 upstream/                     源码记录与上游许可
 docs/                         使用说明、验证、性能记录与版本说明
 ```

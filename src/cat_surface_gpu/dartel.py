@@ -1,15 +1,17 @@
-"""直接移植官方 diffeosphere.c 的球面 DARTEL 网格原语。"""
+"直接移植官方 diffeosphere.c 的球面 DARTEL 网格原语。"
 
 from __future__ import annotations
 
 from functools import lru_cache
 from typing import Any
+import os
 
 import numpy as np
+from numba import njit, prange
 
 
 def _array_module(array: Any):
-    """按数组类型选择 NumPy 或 CuPy，避免 CPU 测试导入 CUDA。"""
+    "按数组类型选择 NumPy 或 CuPy，避免 CPU 测试导入 CUDA。"
 
     if hasattr(array, "__cuda_array_interface__"):
         import cupy as cp
@@ -24,7 +26,7 @@ def identity_mapping(
     array_module=np,
     dtype=np.float64,
 ):
-    """生成官方一基坐标约定下的恒等二维映射。"""
+    "生成官方一基坐标约定下的恒等二维映射。"
 
     height, width = map(int, shape)
     y, x = array_module.meshgrid(
@@ -36,7 +38,7 @@ def identity_mapping(
 
 
 def _device_cache_id(array_module) -> int:
-    """返回数组模块对应的设备编号，作为缓存键的一部分。"""
+    "返回数组模块对应的设备编号，作为缓存键的一部分。"
 
     if array_module is np:
         return -1
@@ -50,7 +52,7 @@ def _cached_identity_mapping(
     dtype_key: str,
     device_id: int,
 ):
-    """缓存 DARTEL 重复使用的恒等坐标网格。"""
+    "缓存 DARTEL 重复使用的恒等坐标网格。"
 
     array_module = np if device_id < 0 else __import__("cupy")
     dtype = np.dtype(dtype_key)
@@ -62,7 +64,7 @@ def _cached_identity_mapping(
 
 
 def _bound(x, y, width: int, height: int, xp):
-    """复现官方 x 循环、y Neumann 反射边界。"""
+    "复现官方 x 循环、y Neumann 反射边界。"
 
     bounded_x = xp.mod(x, width)
     if height == 1:
@@ -76,7 +78,7 @@ def _bound(x, y, width: int, height: int, xp):
 
 @lru_cache(maxsize=8)
 def _cached_grid_indices(height: int, width: int, device_id: int):
-    """缓存周期 x 轴和反射 y 轴的四邻域索引。"""
+    "缓存周期 x 轴和反射 y 轴的四邻域索引。"
 
     array_module = np if device_id < 0 else __import__("cupy")
     x = array_module.arange(int(width), dtype=array_module.int64)[None, :]
@@ -89,7 +91,7 @@ def _cached_grid_indices(height: int, width: int, device_id: int):
 
 
 def _bilinear(field, x, y, *, coordinate_period: int | None = None):
-    """按官方 bound 和双线性权重采样二维数组。"""
+    "按官方 bound 和双线性权重采样二维数组。"
 
     xp = _array_module(field)
     height, width = field.shape
@@ -116,14 +118,260 @@ def _bilinear(field, x, y, *, coordinate_period: int | None = None):
     ) * fraction_y
 
 
+@njit(cache=True, inline="always")
+def _sample_bilinear_cpu(field, x0, x1, y0, y1, fx, fy, period, offset):
+    "复用坐标索引，保留双线性插值运算顺序。"
+
+    value00 = field[y0, x0] + offset
+    value10 = field[y0, x1] + offset
+    value01 = field[y1, x0] + offset
+    value11 = field[y1, x1] + offset
+    if period:
+        p = float(period)
+        value10 -= np.floor((value10 - value00) / p + 0.5) * p
+        value01 -= np.floor((value01 - value00) / p + 0.5) * p
+        value11 -= np.floor((value11 - value00) / p + 0.5) * p
+    inverse_x = 1.0 - fx
+    inverse_y = 1.0 - fy
+    return (value00 * inverse_x + value10 * fx) * inverse_y + (
+        value01 * inverse_x + value11 * fx
+    ) * fy
+
+
+@njit(cache=True, parallel=True, fastmath=False)
+def _compose_jacobian_cpu_fused(
+    mapping_a, jacobian_a, mapping_b, jacobian_b, composed, jacobian
+):
+    "每个网格点仅计算一次邻域索引，并复合映射和四个雅可比分量。"
+
+    height, width = mapping_a.shape[1:]
+    for row in prange(height):
+        for col in range(width):
+            x = mapping_a[0, row, col] - 1.0
+            y = mapping_a[1, row, col] - 1.0
+            floor_x = int(np.floor(x))
+            floor_y = int(np.floor(y))
+            fx = x - floor_x
+            fy = y - floor_y
+            x0 = floor_x % width
+            x1 = (floor_x + 1) % width
+            if height == 1:
+                y0 = 0
+                y1 = 0
+            else:
+                fold0 = floor_y % (2 * height)
+                fold1 = (floor_y + 1) % (2 * height)
+                y0 = 2 * height - fold0 - 1 if fold0 >= height else fold0
+                y1 = 2 * height - fold1 - 1 if fold1 >= height else fold1
+
+            composed[0, row, col] = (
+                _sample_bilinear_cpu(mapping_b[0], x0, x1, y0, y1, fx, fy, width, -1.0)
+                + 1.0
+            )
+            composed[1, row, col] = (
+                _sample_bilinear_cpu(mapping_b[1], x0, x1, y0, y1, fx, fy, height, -1.0)
+                + 1.0
+            )
+            b00 = _sample_bilinear_cpu(jacobian_b[0, 0], x0, x1, y0, y1, fx, fy, 0, 0.0)
+            b01 = _sample_bilinear_cpu(jacobian_b[0, 1], x0, x1, y0, y1, fx, fy, 0, 0.0)
+            b10 = _sample_bilinear_cpu(jacobian_b[1, 0], x0, x1, y0, y1, fx, fy, 0, 0.0)
+            b11 = _sample_bilinear_cpu(jacobian_b[1, 1], x0, x1, y0, y1, fx, fy, 0, 0.0)
+            a00 = jacobian_a[0, 0, row, col]
+            a01 = jacobian_a[0, 1, row, col]
+            a10 = jacobian_a[1, 0, row, col]
+            a11 = jacobian_a[1, 1, row, col]
+            jacobian[0, 0, row, col] = a00 * b00 + a01 * b10
+            jacobian[0, 1, row, col] = a00 * b01 + a01 * b11
+            jacobian[1, 0, row, col] = a10 * b00 + a11 * b10
+            jacobian[1, 1, row, col] = a10 * b01 + a11 * b11
+
+
+@njit(cache=True, parallel=True, fastmath=False)
+def _sample_transport_cpu_fused(
+    gradient, hessian, mapping, sampled_gradient, sampled_hessian
+):
+    "梯度与 Hessian 的五个采样通道共享网格索引。"
+
+    height, width = mapping.shape[1:]
+    for row in prange(height):
+        for col in range(width):
+            x = mapping[0, row, col] - 1.0
+            y = mapping[1, row, col] - 1.0
+            floor_x = int(np.floor(x))
+            floor_y = int(np.floor(y))
+            fx = x - floor_x
+            fy = y - floor_y
+            x0 = floor_x % width
+            x1 = (floor_x + 1) % width
+            if height == 1:
+                y0 = 0
+                y1 = 0
+            else:
+                fold0 = floor_y % (2 * height)
+                fold1 = (floor_y + 1) % (2 * height)
+                y0 = 2 * height - fold0 - 1 if fold0 >= height else fold0
+                y1 = 2 * height - fold1 - 1 if fold1 >= height else fold1
+            for component in range(2):
+                sampled_gradient[component, row, col] = _sample_bilinear_cpu(
+                    gradient[component], x0, x1, y0, y1, fx, fy, 0, 0.0
+                )
+            for component in range(3):
+                sampled_hessian[component, row, col] = _sample_bilinear_cpu(
+                    hessian[component], x0, x1, y0, y1, fx, fy, 0, 0.0
+                )
+
+
+@njit(cache=True, parallel=True, fastmath=False)
+def _transport_accumulate_cpu_fused(
+    gradient,
+    hessian,
+    sampled_gradient,
+    sampled_hessian,
+    jacobian,
+):
+    "逐像素累加缩放平方法运输后的梯度和对称 Hessian。"
+
+    height, width = gradient.shape[1:]
+    for row in prange(height):
+        for col in range(width):
+            j11 = jacobian[0, 0, row, col]
+            j21 = jacobian[0, 1, row, col]
+            j12 = jacobian[1, 0, row, col]
+            j22 = jacobian[1, 1, row, col]
+            determinant = j11 * j22 - j12 * j21
+            first = sampled_gradient[0, row, col]
+            second = sampled_gradient[1, row, col]
+            gradient[0, row, col] += determinant * (first * j11 + second * j21)
+            gradient[1, row, col] += determinant * (first * j12 + second * j22)
+            a00 = sampled_hessian[0, row, col]
+            a11 = sampled_hessian[1, row, col]
+            a01 = sampled_hessian[2, row, col]
+            tmp1 = a00 * j11 + a01 * j21
+            tmp2 = a01 * j11 + a11 * j21
+            tmp3 = a00 * j12 + a01 * j22
+            tmp4 = a01 * j12 + a11 * j22
+            hessian[0, row, col] += determinant * (tmp1 * j11 + tmp2 * j21)
+            hessian[1, row, col] += determinant * (tmp3 * j12 + tmp4 * j22)
+            hessian[2, row, col] += determinant * (tmp1 * j12 + tmp2 * j22)
+
+
+@njit(cache=True, parallel=True, fastmath=False)
+def _small_deformation_cpu_fused(velocity, scale, mapping, jacobian):
+    "单次遍历计算 FP64 小形变映射与中心差分雅可比。"
+
+    height, width = velocity.shape[1:]
+    half_scale = scale / 2.0
+    for row in prange(height):
+        up = row - 1 if row > 0 else 0
+        down = row + 1 if row + 1 < height else height - 1
+        for col in range(width):
+            left = col - 1 if col > 0 else width - 1
+            right = col + 1 if col + 1 < width else 0
+            mapping[0, row, col] = float(col + 1) + velocity[0, row, col] * scale
+            mapping[1, row, col] = float(row + 1) + velocity[1, row, col] * scale
+            jacobian[0, 0, row, col] = (
+                velocity[0, row, right] - velocity[0, row, left]
+            ) * half_scale + 1.0
+            jacobian[0, 1, row, col] = (
+                velocity[1, row, right] - velocity[1, row, left]
+            ) * half_scale
+            jacobian[1, 0, row, col] = (
+                velocity[0, down, col] - velocity[0, up, col]
+            ) * half_scale
+            jacobian[1, 1, row, col] = (
+                velocity[1, down, col] - velocity[1, up, col]
+            ) * half_scale + 1.0
+
+
+@njit(cache=True, parallel=True, fastmath=False)
+def _membrane_operator_cpu_fused(field, mu, identity_weight, output):
+    "计算两个膜能分量，采用 x 周期边界与 y 反射边界。"
+
+    height, width = field.shape[1:]
+    center = 4.0 * mu + identity_weight
+    for row in prange(height):
+        up = row - 1 if row > 0 else 0
+        down = row + 1 if row + 1 < height else height - 1
+        for col in range(width):
+            left = col - 1 if col > 0 else width - 1
+            right = col + 1 if col + 1 < width else 0
+            for component in range(2):
+                neighbours = (
+                    field[component, row, left]
+                    + field[component, row, right]
+                    + field[component, up, col]
+                    + field[component, down, col]
+                )
+                output[component, row, col] = (
+                    center * field[component, row, col] - mu * neighbours
+                )
+
+
+@njit(cache=True, parallel=True, fastmath=False)
+def _objective_terms_cpu_fused(
+    source,
+    target,
+    mapping,
+    jacobian,
+    gradient,
+    hessian,
+    squared_difference,
+):
+    "融合无权目标函数的采样、梯度及 Hessian 计算。"
+
+    height, width = source.shape
+    for row in prange(height):
+        for col in range(width):
+            x = mapping[0, row, col] - 1.0
+            y = mapping[1, row, col] - 1.0
+            floor_x = int(np.floor(x))
+            floor_y = int(np.floor(y))
+            fx = x - floor_x
+            fy = y - floor_y
+            ix = 1.0 - fx
+            iy = 1.0 - fy
+            x0 = floor_x % width
+            x1 = (floor_x + 1) % width
+            if height == 1:
+                y0 = 0
+                y1 = 0
+            else:
+                fold0 = floor_y % (2 * height)
+                fold1 = (floor_y + 1) % (2 * height)
+                y0 = 2 * height - fold0 - 1 if fold0 >= height else fold0
+                y1 = 2 * height - fold1 - 1 if fold1 >= height else fold1
+            k22 = source[y0, x0]
+            k12 = source[y0, x1]
+            k21 = source[y1, x0]
+            k11 = source[y1, x1]
+            sampled = (k11 * fx + k21 * ix) * fy + (k12 * fx + k22 * ix) * iy
+            difference = sampled - target[row, col]
+            derivative_x = (k11 - k21) * fy + (k12 - k22) * iy
+            derivative_y = (k11 * fx + k21 * ix) - (k12 * fx + k22 * ix)
+            gx = (
+                jacobian[0, 0, row, col] * derivative_x
+                + jacobian[0, 1, row, col] * derivative_y
+            )
+            gy = (
+                jacobian[1, 0, row, col] * derivative_x
+                + jacobian[1, 1, row, col] * derivative_y
+            )
+            gradient[0, row, col] = gx * difference
+            gradient[1, row, col] = gy * difference
+            hessian[0, row, col] = gx * gx
+            hessian[1, row, col] = gy * gy
+            hessian[2, row, col] = gx * gy
+            squared_difference[row, col] = difference * difference
+
+
 def compose(mapping_a, mapping_b):
-    """复现官方 ``composition``，返回 ``B(A(x))``。"""
+    "复现官方 ``composition``，返回 ``B(A(x))``。"
 
     xp = _array_module(mapping_a)
     if mapping_a.shape != mapping_b.shape or mapping_a.ndim != 3:
-        raise ValueError("两个映射必须具有相同的 (2, H, W) 形状")
+        raise ValueError("Both mappings must have the same shape (2, H, W)")
     if mapping_a.shape[0] != 2:
-        raise ValueError("映射第一维必须为 2")
+        raise ValueError("The first mapping dimension must be two")
     height, width = mapping_a.shape[1:]
     x = mapping_a[0] - 1.0
     y = mapping_a[1] - 1.0
@@ -133,14 +381,24 @@ def compose(mapping_a, mapping_b):
 
 
 def compose_with_jacobian(mapping_a, jacobian_a, mapping_b, jacobian_b):
-    """复现官方 ``composition_jacobian``。"""
+    "复现官方 ``composition_jacobian``。"
 
     xp = _array_module(mapping_a)
     if jacobian_a.shape != jacobian_b.shape:
-        raise ValueError("两个 Jacobian 必须具有相同形状")
+        raise ValueError("Both Jacobians must have the same shape")
     if jacobian_a.shape[:2] != (2, 2) or jacobian_a.shape[2:] != mapping_a.shape[1:]:
-        raise ValueError("Jacobian 必须是 (2, 2, H, W)")
+        raise ValueError("Jacobian must have shape (2, 2, H, W)")
     height, width = mapping_a.shape[1:]
+    if xp is np and all(
+        array.dtype == np.float64 and array.flags.c_contiguous
+        for array in (mapping_a, jacobian_a, mapping_b, jacobian_b)
+    ):
+        composed = np.empty_like(mapping_a)
+        jacobian = np.empty_like(jacobian_a)
+        _compose_jacobian_cpu_fused(
+            mapping_a, jacobian_a, mapping_b, jacobian_b, composed, jacobian
+        )
+        return composed, jacobian
     if (
         xp is not np
         and mapping_a.dtype == xp.float64
@@ -188,15 +446,20 @@ def compose_with_jacobian(mapping_a, jacobian_a, mapping_b, jacobian_b):
 
 
 def small_deformation(velocity, scale: float):
-    """复现官方 ``smalldef_jac`` 的形变和中心差分 Jacobian。"""
+    "复现官方 ``smalldef_jac`` 的形变和中心差分 Jacobian。"
 
     xp = _array_module(velocity)
     if velocity.ndim != 3 or velocity.shape[0] != 2:
-        raise ValueError("速度场必须是 (2, H, W)")
+        raise ValueError("Velocity field must have shape (2, H, W)")
     height, width = velocity.shape[1:]
+    if xp is np and velocity.dtype == np.float64 and velocity.flags.c_contiguous:
+        mapping = np.empty_like(velocity)
+        jacobian = np.empty((2, 2, height, width), dtype=np.float64)
+        _small_deformation_cpu_fused(velocity, float(scale), mapping, jacobian)
+        return mapping, jacobian
     if xp is not np and velocity.dtype == xp.float64:
-        # 生产 SurfWarp 使用双精度；把映射和四个 Jacobian 分量放到
-        # 一个 kernel 中，避免反复建立邻域索引和中间数组。
+        # 正式 SurfWarp 使用双精度；在同一核内融合映射与四个雅可比分量，
+        # 避免重复构建邻域索引和中间数组。
         kernel = _get_small_deformation_kernel()
         mapping = xp.empty_like(velocity)
         jacobian = xp.empty((2, 2, height, width), dtype=velocity.dtype)
@@ -239,10 +502,10 @@ def small_deformation(velocity, scale: float):
 
 
 def exponentiate_velocity(velocity, squarings: int):
-    """复现官方 ``expdef`` 的缩放平方指数映射。"""
+    "复现官方 ``expdef`` 的缩放平方指数映射。"
 
     if squarings < 0:
-        raise ValueError("squarings 不能为负数")
+        raise ValueError("squarings must not be negative")
     scale = 1.0 / float(2**squarings)
     mapping, jacobian = small_deformation(velocity, scale)
     for _ in range(squarings):
@@ -251,7 +514,7 @@ def exponentiate_velocity(velocity, squarings: int):
 
 
 def _grid_neighbours(field):
-    """返回与官方 bound 一致的上下左右邻域。"""
+    "返回与官方 bound 一致的上下左右邻域。"
 
     xp = _array_module(field)
     height, width = field.shape[-2:]
@@ -267,15 +530,23 @@ def _grid_neighbours(field):
 
 
 def membrane_operator(field, mu: float, identity_weight: float = 0.0):
-    """复现默认 ``LtLf_me`` 膜能正则算子。"""
+    "复现默认 ``LtLf_me`` 膜能正则算子。"
 
+    if (
+        _array_module(field) is np
+        and field.dtype == np.float64
+        and field.flags.c_contiguous
+    ):
+        output = np.empty_like(field)
+        _membrane_operator_cpu_fused(field, float(mu), float(identity_weight), output)
+        return output
     left, right, up, down = _grid_neighbours(field)
     center = 4.0 * float(mu) + float(identity_weight)
     return center * field - float(mu) * (left + right + up + down)
 
 
 def jacobian_divide_small_deformation(jacobian, velocity, scale: float):
-    """复现官方 ``jac_div_smalldef``。"""
+    "复现官方 ``jac_div_smalldef``。"
 
     _, small = small_deformation(velocity, scale)
     a = small[0, 0]
@@ -303,7 +574,7 @@ _SMALL_DEFORMATION_KERNEL = None
 
 
 def _get_small_deformation_kernel():
-    """延迟构建双精度 smalldef 与 Jacobian 融合核。"""
+    "延迟构建双精度 smalldef 与 Jacobian 融合核。"
 
     global _SMALL_DEFORMATION_KERNEL
     if _SMALL_DEFORMATION_KERNEL is None:
@@ -352,7 +623,7 @@ _OBJECTIVE_KERNEL = None
 
 
 def _get_objective_kernel():
-    """延迟构建无权重双精度目标函数、梯度和 Hessian 融合核。"""
+    "延迟构建无权重双精度目标函数、梯度和 Hessian 融合核。"
 
     global _OBJECTIVE_KERNEL
     if _OBJECTIVE_KERNEL is None:
@@ -433,7 +704,7 @@ _COMPOSE_JACOBIAN_KERNEL = None
 
 
 def _get_compose_jacobian_kernel():
-    """延迟构建映射与 Jacobian 复合的双精度融合核。"""
+    "延迟构建映射与 Jacobian 复合的双精度融合核。"
 
     global _COMPOSE_JACOBIAN_KERNEL
     if _COMPOSE_JACOBIAN_KERNEL is None:
@@ -535,7 +806,7 @@ _PCG_KERNELS = None
 
 
 def _get_pcg_kernels():
-    """延迟构建 PCG 的双精度膜算子和逐点更新核。"""
+    "延迟构建 PCG 的双精度膜算子和逐点更新核。"
 
     global _PCG_KERNELS
     if _PCG_KERNELS is None:
@@ -653,10 +924,32 @@ def _solve_membrane_system_cupy_fused(
     relative_tolerance: float,
     check_interval: int | None = None,
 ):
-    """使用融合 CUDA kernel 执行 CuPy PCG，保留逐轮收敛检查。"""
+    "使用融合 CUDA kernel 执行 CuPy PCG，保留逐轮收敛检查。"
 
     import cupy as cp
-    import os
+
+    configured_interval = (
+        int(os.environ.get("CAT_SURFACE_PCG_CHECK_INTERVAL", "1"))
+        if check_interval is None
+        else int(check_interval)
+    )
+    if (
+        configured_interval == 0
+        and max_iterations > 0
+        and os.environ.get("CAT_SURFACE_PCG_GRAPH", "1") == "1"
+        and hessian.dtype == cp.float64
+        and right_hand_side.dtype == cp.float64
+        and hessian.flags.c_contiguous
+        and right_hand_side.flags.c_contiguous
+        and right_hand_side.ndim == 3
+        and right_hand_side.shape[0] == 2
+        and hessian.shape == (3, *right_hand_side.shape[1:])
+    ):
+        from cat_surface_gpu.backends.cuda.pcg_graph import solve_fixed_pcg
+
+        return solve_fixed_pcg(
+            hessian, right_hand_side, mu, identity_weight, max_iterations
+        )
 
     apply_kernel, precondition_kernel, update_kernel, direction_kernel = (
         _get_pcg_kernels()
@@ -687,13 +980,8 @@ def _solve_membrane_system_cupy_fused(
     residual_dot = cp.sum(residual * preconditioned, dtype=cp.float64)
     initial_norm = cp.sqrt(cp.sum(right_hand_side * right_hand_side, dtype=cp.float64))
     threshold = float(relative_tolerance) * cp.maximum(initial_norm, 1.0e-30)
-    configured_interval = (
-        int(os.environ.get("CAT_SURFACE_PCG_CHECK_INTERVAL", "1"))
-        if check_interval is None
-        else int(check_interval)
-    )
-    # 间隔为 0 表示按固定上限执行完整 PCG，不做中途收敛检查；这不会
-    # 减少迭代次数，只用于避免每轮把一个残差标量同步到 CPU。
+    # 间隔为零时执行完整固定迭代预算，不在中途检查收敛；
+    # 迭代数不变，仅避免每轮向 CPU 同步一个残差标量。
     check_interval = max(0, configured_interval)
     for completed in range(1, int(max_iterations) + 1):
         apply_kernel(
@@ -741,7 +1029,7 @@ def _solve_membrane_system_cupy_fused(
             ):
                 return solution, completed
         if completed == int(max_iterations):
-            # 最后一轮没有下一方向需要构造，避免一次无效的预条件和点积。
+            # 最后一轮无需构建下一方向，因此省去预条件器和点积。
             break
         precondition_kernel(
             (blocks,),
@@ -759,7 +1047,6 @@ def _solve_membrane_system_cupy_fused(
             ),
         )
         next_dot = cp.sum(residual * preconditioned, dtype=cp.float64)
-        # 精确零残差应保持零方向；固定迭代模式仍继续运行，避免 0/0。
         beta = next_dot / cp.where(residual_dot == 0.0, 1.0, residual_dot)
         direction_kernel(
             (blocks,),
@@ -778,12 +1065,37 @@ def _solve_membrane_system_cupy_fused(
 
 
 def objective_terms(source, target, mapping, jacobian, weights=None):
-    """复现官方单通道 ``initialise_objfun``。"""
+    "复现官方单通道 ``initialise_objfun``。"
 
     xp = _array_module(source)
     if source.shape != target.shape or mapping.shape[1:] != source.shape:
-        raise ValueError("源图、目标图和映射网格尺寸必须一致")
+        raise ValueError("Source, target, and mapping grid dimensions must match")
     height, width = source.shape
+    if (
+        xp is np
+        and weights is None
+        and all(
+            array.dtype == np.float64 and array.flags.c_contiguous
+            for array in (source, target, mapping, jacobian)
+        )
+    ):
+        gradient = np.empty((2, height, width), dtype=np.float64)
+        hessian = np.empty((3, height, width), dtype=np.float64)
+        squared_difference = np.empty((height, width), dtype=np.float64)
+        _objective_terms_cpu_fused(
+            source,
+            target,
+            mapping,
+            jacobian,
+            gradient,
+            hessian,
+            squared_difference,
+        )
+        return (
+            0.5 * np.sum(squared_difference, dtype=np.float64),
+            gradient,
+            hessian,
+        )
     if (
         xp is not np
         and weights is None
@@ -796,8 +1108,8 @@ def objective_terms(source, target, mapping, jacobian, weights=None):
         and mapping.flags.c_contiguous
         and jacobian.flags.c_contiguous
     ):
-        # SurfWarp 默认没有逐像素权重；将双线性采样、梯度、Hessian
-        # 和目标函数项合并，避免一轮 DARTEL 中反复分配十余个数组。
+        # SurfWarp 默认无逐像素权重，融合双线性采样、梯度、Hessian
+        # 及目标函数项，避免每轮 DARTEL 重复分配十余个数组。
         import cupy as cp
 
         gradient = cp.empty((2, height, width), dtype=cp.float64)
@@ -883,7 +1195,7 @@ def transport_derivatives(
     *,
     save_transform: bool,
 ):
-    """复现官方 ``squaring`` 对梯度和 Hessian 的传输。"""
+    "复现官方 ``squaring`` 对梯度和 Hessian 的传输。"
 
     xp = _array_module(gradient)
     transported_gradient = gradient.copy()
@@ -891,16 +1203,83 @@ def transport_derivatives(
     current_mapping = mapping
     current_jacobian = jacobian
     for index in range(squarings):
-        x = current_mapping[0] - 1.0
-        y = current_mapping[1] - 1.0
-        sampled_gradient = xp.stack(
-            tuple(_bilinear(transported_gradient[item], x, y) for item in range(2)),
-            axis=0,
+        if (
+            xp is not np
+            and os.environ.get("CAT_SURFACE_TRANSPORT_FUSED", "1") == "1"
+            and all(
+                array.dtype == xp.float64 and array.flags.c_contiguous
+                for array in (
+                    transported_gradient,
+                    transported_hessian,
+                    current_mapping,
+                    current_jacobian,
+                )
+            )
+            and transported_gradient.ndim == 3
+            and transported_gradient.shape[0] == 2
+            and transported_hessian.shape == (3, *transported_gradient.shape[1:])
+            and current_mapping.shape == transported_gradient.shape
+            and current_jacobian.shape == (2, 2, *transported_gradient.shape[1:])
+        ):
+            from cat_surface_gpu.backends.cuda.transport import transport_accumulate
+
+            transported_gradient, transported_hessian = transport_accumulate(
+                transported_gradient,
+                transported_hessian,
+                current_mapping,
+                current_jacobian,
+            )
+            if save_transform or index < squarings - 1:
+                current_mapping, current_jacobian = compose_with_jacobian(
+                    current_mapping, current_jacobian, current_mapping, current_jacobian
+                )
+            continue
+        cpu_fused = xp is np and all(
+            array.dtype == np.float64 and array.flags.c_contiguous
+            for array in (
+                transported_gradient,
+                transported_hessian,
+                current_mapping,
+                current_jacobian,
+            )
         )
-        sampled_hessian = xp.stack(
-            tuple(_bilinear(transported_hessian[item], x, y) for item in range(3)),
-            axis=0,
-        )
+        if cpu_fused:
+            sampled_gradient = np.empty_like(transported_gradient)
+            sampled_hessian = np.empty_like(transported_hessian)
+            _sample_transport_cpu_fused(
+                transported_gradient,
+                transported_hessian,
+                current_mapping,
+                sampled_gradient,
+                sampled_hessian,
+            )
+        else:
+            x = current_mapping[0] - 1.0
+            y = current_mapping[1] - 1.0
+            sampled_gradient = xp.stack(
+                tuple(_bilinear(transported_gradient[item], x, y) for item in range(2)),
+                axis=0,
+            )
+            sampled_hessian = xp.stack(
+                tuple(_bilinear(transported_hessian[item], x, y) for item in range(3)),
+                axis=0,
+            )
+        if cpu_fused:
+            _transport_accumulate_cpu_fused(
+                transported_gradient,
+                transported_hessian,
+                sampled_gradient,
+                sampled_hessian,
+                current_jacobian,
+            )
+            if save_transform or index < squarings - 1:
+                current_mapping, current_jacobian = compose_with_jacobian(
+                    current_mapping,
+                    current_jacobian,
+                    current_mapping,
+                    current_jacobian,
+                )
+            continue
         j11 = current_jacobian[0, 0]
         j21 = current_jacobian[0, 1]
         j12 = current_jacobian[1, 0]
@@ -940,6 +1319,89 @@ def transport_derivatives(
     return transported_gradient, transported_hessian, current_mapping, current_jacobian
 
 
+@njit(cache=True, parallel=True, fastmath=False)
+def _apply_membrane_cpu_fused(
+    field,
+    hessian,
+    mu,
+    identity_weight,
+    output,
+):
+    "单次遍历计算膜能双分量和 Hessian 交叉项，并处理边界。"
+
+    height, width = field.shape[1:]
+    center = 4.0 * mu + identity_weight
+    for y in prange(height):
+        up = max(y - 1, 0)
+        down = min(y + 1, height - 1)
+        for x in range(width):
+            left = (x - 1) % width
+            right = (x + 1) % width
+            value0 = field[0, y, x]
+            value1 = field[1, y, x]
+            membrane0 = center * value0 - mu * (
+                field[0, y, left]
+                + field[0, y, right]
+                + field[0, up, x]
+                + field[0, down, x]
+            )
+            membrane1 = center * value1 - mu * (
+                field[1, y, left]
+                + field[1, y, right]
+                + field[1, up, x]
+                + field[1, down, x]
+            )
+            output[0, y, x] = (
+                membrane0 + hessian[0, y, x] * value0 + hessian[2, y, x] * value1
+            )
+            output[1, y, x] = (
+                membrane1 + hessian[1, y, x] * value1 + hessian[2, y, x] * value0
+            )
+
+
+@njit(cache=True, parallel=True, fastmath=False)
+def _precondition_cpu_fused(residual, hessian, diagonal, output):
+    "每个体素求解一个 2×2 Jacobi 预条件块并复用输出缓冲。"
+
+    height, width = residual.shape[1:]
+    for y in prange(height):
+        for x in range(width):
+            diagonal0 = hessian[0, y, x] + diagonal
+            diagonal1 = hessian[1, y, x] + diagonal
+            cross = hessian[2, y, x]
+            determinant = max(diagonal0 * diagonal1 - cross * cross, 1.0e-30)
+            first = residual[0, y, x]
+            second = residual[1, y, x]
+            output[0, y, x] = (diagonal1 * first - cross * second) / determinant
+            output[1, y, x] = (diagonal0 * second - cross * first) / determinant
+
+
+@njit(cache=True, parallel=True, fastmath=False)
+def _pcg_solution_residual_cpu_fused(solution, residual, direction, applied, step):
+    "同步更新 PCG 解和残差，保留逐元素 FP64 运算顺序。"
+
+    height, width = residual.shape[1:]
+    for row in prange(height):
+        for col in range(width):
+            for component in range(2):
+                solution[component, row, col] += step * direction[component, row, col]
+                residual[component, row, col] -= step * applied[component, row, col]
+
+
+@njit(cache=True, parallel=True, fastmath=False)
+def _pcg_direction_cpu_fused(direction, preconditioned, beta):
+    "原地更新搜索方向，避免 PCG 每轮分配完整场。"
+
+    height, width = direction.shape[1:]
+    for row in prange(height):
+        for col in range(width):
+            for component in range(2):
+                direction[component, row, col] = (
+                    preconditioned[component, row, col]
+                    + beta * direction[component, row, col]
+                )
+
+
 def solve_membrane_system(
     hessian,
     right_hand_side,
@@ -950,7 +1412,7 @@ def solve_membrane_system(
     relative_tolerance: float = 1.0e-6,
     check_interval: int | None = None,
 ):
-    """用预条件共轭梯度求解官方膜能线性系统。"""
+    "用预条件共轭梯度求解官方膜能线性系统。"
 
     xp = _array_module(right_hand_side)
     if xp is not np:
@@ -963,27 +1425,19 @@ def solve_membrane_system(
             relative_tolerance=relative_tolerance,
             check_interval=check_interval,
         )
-    a00, a11, a01 = hessian
     diagonal = 4.0 * float(mu) + float(identity_weight)
+    applied_workspace = np.empty_like(right_hand_side)
+    preconditioned_workspace = np.empty_like(right_hand_side)
 
     def apply(field):
-        regularized = membrane_operator(field, mu, identity_weight)
-        result = xp.empty_like(field)
-        result[0] = regularized[0] + a00 * field[0] + a01 * field[1]
-        result[1] = regularized[1] + a11 * field[1] + a01 * field[0]
-        return result
+        _apply_membrane_cpu_fused(
+            field, hessian, float(mu), float(identity_weight), applied_workspace
+        )
+        return applied_workspace
 
     def precondition(residual):
-        d00 = a00 + diagonal
-        d11 = a11 + diagonal
-        determinant = xp.maximum(d00 * d11 - a01 * a01, 1.0e-30)
-        return xp.stack(
-            (
-                (d11 * residual[0] - a01 * residual[1]) / determinant,
-                (d00 * residual[1] - a01 * residual[0]) / determinant,
-            ),
-            axis=0,
-        )
+        _precondition_cpu_fused(residual, hessian, diagonal, preconditioned_workspace)
+        return preconditioned_workspace
 
     solution = xp.zeros_like(right_hand_side)
     residual = right_hand_side.copy()
@@ -998,8 +1452,9 @@ def solve_membrane_system(
         applied = apply(direction)
         denominator = xp.sum(direction * applied, dtype=xp.float64)
         step = residual_dot / xp.maximum(denominator, 1.0e-30)
-        solution += step * direction
-        residual -= step * applied
+        _pcg_solution_residual_cpu_fused(
+            solution, residual, direction, applied, float(step)
+        )
         if (
             configured_interval > 0
             and (completed % configured_interval == 0 or completed == max_iterations)
@@ -1014,16 +1469,17 @@ def solve_membrane_system(
             break
         next_preconditioned = precondition(residual)
         next_dot = xp.sum(residual * next_preconditioned, dtype=xp.float64)
-        # 与 CUDA 路径一致：精确零残差不会在下一轮制造非有限值。
-        beta = next_dot / xp.where(residual_dot == 0.0, 1.0, residual_dot)
-        direction = next_preconditioned + beta * direction
-        preconditioned = next_preconditioned
+        _pcg_direction_cpu_fused(
+            direction,
+            next_preconditioned,
+            float(next_dot / xp.where(residual_dot == 0.0, 1.0, residual_dot)),
+        )
         residual_dot = next_dot
     return solution, completed
 
 
 def _fmg_wt2(value, xp):
-    """返回官方 FMG ``wt2`` 三次 B 样条权重。"""
+    "返回官方 FMG ``wt2`` 三次 B 样条权重。"
 
     distance = xp.abs(value)
     return xp.where(
@@ -1038,11 +1494,11 @@ def _fmg_wt2(value, xp):
 
 
 def _fmg_resize(field, output_shape):
-    """复现官方 ``resize`` 的 y 方向 Neumann、x 方向周期插值。"""
+    "复现官方 ``resize`` 的 y 方向 Neumann、x 方向周期插值。"
 
     xp = _array_module(field)
     if field.ndim != 3:
-        raise ValueError("FMG 网格必须是 (通道, 高度, 宽度)")
+        raise ValueError("FMG grid must have shape (channels, height, width)")
     input_height, input_width = field.shape[1:]
     output_height, output_width = map(int, output_shape)
 
@@ -1085,7 +1541,7 @@ def _fmg_resize(field, output_shape):
 
 
 def _fmg_membrane_weights(mu, identity_weight, spacing_x, spacing_y):
-    """生成官方膜能 FMG 在当前层级使用的五点模板系数。"""
+    "生成官方膜能 FMG 在当前层级使用的五点模板系数。"
 
     weight_x = float(mu) * float(spacing_x) ** 2
     weight_y = float(mu) * float(spacing_y) ** 2
@@ -1097,7 +1553,7 @@ def _fmg_membrane_weights(mu, identity_weight, spacing_x, spacing_y):
 
 
 def _fmg_apply_membrane(field, hessian, weights):
-    """应用 FMG 膜能加 Hessian 的矩阵。"""
+    "应用 FMG 膜能加 Hessian 的矩阵。"
 
     xp = _array_module(field)
     center, vertical, horizontal = weights
@@ -1124,7 +1580,7 @@ _FMG_RELAX_KERNEL = None
 
 
 def _get_fmg_relax_kernel():
-    """延迟构建 CuPy FMG 棋盘格松弛核。"""
+    "延迟构建 CuPy FMG 棋盘格松弛核。"
 
     global _FMG_RELAX_KERNEL
     if _FMG_RELAX_KERNEL is None:
@@ -1180,7 +1636,7 @@ def _get_fmg_relax_kernel():
 
 
 def _fmg_relax_membrane(field, hessian, right_hand_side, weights, iterations):
-    """执行官方膜能棋盘格 Gauss–Seidel 松弛。"""
+    "执行官方膜能棋盘格 Gauss–Seidel 松弛。"
 
     xp = _array_module(field)
     height, width = field.shape[1:]
@@ -1238,15 +1694,13 @@ def solve_membrane_system_fmg(
     cycles: int = 3,
     relax_iterations: int = 3,
 ):
-    """用官方 FMG 层级和膜能棋盘格松弛求解线性系统。
-
-    该函数只实现官方当前默认的膜能 ``rtype=1``，用于 CuPy/NumPy 数值与速度
-    A/B；其余正则类型仍由 PCG 路径处理。
-    """
+    "用官方 FMG 层级和膜能棋盘格松弛求解线性系统。\n\n该函数只实现官方当前默认的膜能 ``rtype=1``，用于 CuPy/NumPy 数值与速度\nA/B；其余正则类型仍由 PCG 路径处理。"
 
     xp = _array_module(right_hand_side)
     if hessian.shape[0] != 3 or right_hand_side.shape[0] != 2:
-        raise ValueError("FMG Hessian 必须为 (3,H,W)，右端项必须为 (2,H,W)")
+        raise ValueError(
+            "FMG Hessian must have shape (3,H,W) and the right-hand side (2,H,W)"
+        )
     base_height, base_width = right_hand_side.shape[1:]
     dimensions = [(base_height, base_width)]
     while dimensions[-1][0] >= 2 or dimensions[-1][1] >= 2:
@@ -1347,7 +1801,7 @@ def dartel_symmetric_step(
     collect_diagnostics: bool = True,
     pcg_check_interval: int | None = None,
 ):
-    """执行官方默认 code=1、rtype=1 的一次 DARTEL 更新。"""
+    "执行官方默认 code=1、rtype=1 的一次 DARTEL 更新。"
 
     xp = _array_module(velocity)
     scale = 1.0 / float(2**time_step)
@@ -1412,7 +1866,7 @@ def dartel_symmetric_step(
         "solver_iterations": solver_steps,
     }
     if collect_diagnostics:
-        # SurfWarp 主循环不使用这两个标量；保留开关供独立数值诊断调用。
+        # SurfWarp 主循环不使用这些标量，保留选项用于独立数值诊断。
         diagnostics.update(
             {
                 "regularization": 0.5

@@ -14,7 +14,7 @@ python -m pytest -q --basetemp .work/setup/tmp/pytest
 python scripts/verify_release.py
 ```
 
-CPU 测试不需要 CuPy 或 GPU。CUDA 测试需要可用的 NVIDIA 设备；请单独说明跳过了哪些测试。
+上例安装 CUDA 支持。Metal 开发使用 `.[metal,test]`，CPU 开发使用 `.[test]`。CPU 测试无需 GPU；CUDA 测试需要 NVIDIA 设备，Metal 测试需要 Apple Silicon macOS。测试结果中应记录跳过项。
 
 ## 算法修改
 

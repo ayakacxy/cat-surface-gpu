@@ -4,6 +4,13 @@
 
 本文件记录主要变化。
 
+## 0.3.0 — 开发中，未发布
+
+- 新增 CUDA 分块平滑、FP32 特征求解、GPU 常驻 DARTEL 和固定目标缓存。
+- 新增完整 CPU 入口及 MLX Metal 调度，保留两条 CLI 和 CUDA 数组 API。
+- 保留参数、GIFTI 与固定 PCG 零残差检查；新增 Windows/macOS CPU CI 配置。
+- 平台支持、性能测试和数值对比见 [v0.3.0 说明](RELEASE_v0.3.0.zh-CN.md)。
+
 ## [0.2.0] - 2026-10-13
 
 ### 新增与调整
