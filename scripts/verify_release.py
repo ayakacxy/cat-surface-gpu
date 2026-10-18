@@ -57,7 +57,7 @@ def check_wheel(path: Path, version: str) -> None:
             name for name in names if name.endswith(".dist-info/METADATA")
         )
         metadata = archive.read(metadata_name).decode()
-        if f"Version: {version}\n" not in metadata:
+        if f"Version: {version}" not in metadata.splitlines():
             raise RuntimeError("Wheel version differs from pyproject.toml")
         entry_name = next(
             name for name in names if name.endswith(".dist-info/entry_points.txt")
