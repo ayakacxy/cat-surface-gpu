@@ -4,7 +4,7 @@
 
 All notable changes are documented here.
 
-## 0.3.0 — In development, unreleased
+## [0.3.0] - 2026-10-18
 
 - Add CUDA tiled smoothing, FP32 feature solves, resident DARTEL and fixed-target caches.
 - Add complete CPU execution and MLX Metal dispatch, retaining both CLIs and CUDA array APIs.

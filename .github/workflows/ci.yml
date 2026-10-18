@@ -35,7 +35,12 @@ jobs:
       NUMBA_NUM_THREADS: "8"
     steps:
       - uses: actions/checkout@v7
-      - name: Prepare project-local work directories
+      - name: Prepare project-local work directories on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: New-Item -ItemType Directory -Force $env:TMPDIR, $env:XDG_CACHE_HOME | Out-Null
+      - name: Prepare project-local work directories on Unix
+        if: runner.os != 'Windows'
         run: mkdir -p "$TMPDIR" "$XDG_CACHE_HOME"
       - uses: actions/setup-python@v7
         with:
