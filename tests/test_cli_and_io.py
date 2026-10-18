@@ -262,7 +262,7 @@ def test_runtime_has_no_cat_executables_or_old_backends():
     package = Path(cat_surface_gpu.__file__).parent
     blocked = {"subprocess", "ctypes", "torch", "triton", "simnibs"}
     for path in package.glob("*.py"):
-        tree = ast.parse(path.read_text())
+        tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 assert not blocked.intersection(
