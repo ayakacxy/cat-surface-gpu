@@ -11,7 +11,7 @@
 从发布附件下载 wheel 后，在 Python 环境中安装：
 
 ```bash
-python -m pip install ./cat_surface_gpu-0.3.1-py3-none-any.whl
+python -m pip install ./cat_surface_gpu-0.3.0-py3-none-any.whl
 ```
 
 这会安装 CPU 支持。GPU 计算还需要相应依赖：CUDA 12 使用 `cupy-cuda12x>=13`，Apple Silicon Metal 使用 `mlx>=0.31`。具体要求见[后端安装说明](../README.zh-CN.md#install)。
@@ -67,7 +67,7 @@ python -m pip install -e ".[test]"
 
 ```bash
 python -m build --outdir .work/build/dist
-python scripts/verify_release.py --wheel .work/build/dist/cat_surface_gpu-0.3.1-py3-none-any.whl
+python scripts/verify_release.py --wheel .work/build/dist/cat_surface_gpu-0.3.0-py3-none-any.whl
 ```
 
 构建生成 wheel 和源码归档。`py3-none-any` wheel 本身与平台无关；NumPy、Numba、CuPy 和 MLX 各自提供平台相关依赖。源码归档还包含测试、工具、文档和许可说明。解剖表面及模板由用户另行提供。
@@ -75,7 +75,7 @@ python scripts/verify_release.py --wheel .work/build/dist/cat_surface_gpu-0.3.1-
 检查安装后的命令行入口：
 
 ```bash
-python -m pip install --force-reinstall --no-deps .work/build/dist/cat_surface_gpu-0.3.1-py3-none-any.whl
+python -m pip install --force-reinstall --no-deps .work/build/dist/cat_surface_gpu-0.3.0-py3-none-any.whl
 cat-surf2sphere-gpu --help
 cat-surfwarp-gpu --help
 ```
@@ -103,10 +103,10 @@ python scripts/build_release_artifacts.py --upstream-archive .work/build/source/
 
 | 附件 | 内容 |
 | --- | --- |
-| `cat_surface_gpu-0.3.1-py3-none-any.whl` | 可安装的 Python 软件包 |
-| `cat_surface_gpu-0.3.1.tar.gz` | 本项目源码包 |
+| `cat_surface_gpu-0.3.0-py3-none-any.whl` | 可安装的 Python 软件包 |
+| `cat_surface_gpu-0.3.0.tar.gz` | 本项目源码包 |
 | `CAT-Surface-<commit>.tar.gz` | 固定版本的算法参考源码 |
-| `cat-surface-gpu-0.3.1.cdx.json` | CycloneDX 依赖清单 |
+| `cat-surface-gpu-0.3.0.cdx.json` | CycloneDX 依赖清单 |
 | `SHA256SUMS` | 以上四个附件的 SHA-256 校验值 |
 
 参考源码归档用于提供源码及署名信息，不会随 wheel 安装。其许可和用途见[第三方说明](../THIRD_PARTY_NOTICES.zh-CN.md)。

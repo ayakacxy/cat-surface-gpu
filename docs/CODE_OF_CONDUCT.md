@@ -1,4 +1,4 @@
-# Code of conduct
+# Community Code of Conduct
 
 [English](CODE_OF_CONDUCT.md) · [简体中文](CODE_OF_CONDUCT.zh-CN.md)
 

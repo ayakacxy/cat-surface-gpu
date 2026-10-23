@@ -1,4 +1,4 @@
-# Contributing
+# Contributing to CAT-Surface GPU
 
 [English](CONTRIBUTING.md) · [简体中文](CONTRIBUTING.zh-CN.md)
 

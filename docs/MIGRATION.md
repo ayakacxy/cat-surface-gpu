@@ -1,4 +1,4 @@
-# Migration guide
+# Version Migration Guide
 
 [English](MIGRATION.md) · [简体中文](MIGRATION.zh-CN.md)
 

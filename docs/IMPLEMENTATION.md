@@ -1,4 +1,4 @@
-# Python API and implementation
+# Implementation and Python API
 
 [English](IMPLEMENTATION.md) · [简体中文](IMPLEMENTATION.zh-CN.md)
 

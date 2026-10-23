@@ -1,17 +1,6 @@
-# Changelog
+# Project Changelog
 
 [English](CHANGELOG.md) · [简体中文](CHANGELOG.zh-CN.md)
-
-## [0.3.1] - 2026-10-23
-
-### Documentation
-
-- Rewrote the English and Chinese README, user guides, developer guides and release notes.
-- Added a dedicated report for the existing v0.3.0 benchmarks.
-- Consolidated version history and updated documentation links.
-- Rebuilt distribution packages with the updated documentation; algorithms and numerical behavior are unchanged.
-
-[Release notes](RELEASE_v0.3.1.md)
 
 ## [0.3.0] - 2026-10-18
 
@@ -27,6 +16,7 @@
 - Accelerated CUDA smoothing with shared-memory tiles.
 - Added FP32 feature solves and DARTEL while retaining FP64 geometry assembly and final exponentiation.
 - Cached fixed topology and target features; removed repeated input checks within registration.
+- Revised the English and Chinese guides and synchronized the packaged documentation.
 
 [Release notes](RELEASE_v0.3.0.md) · [Benchmarks](BENCHMARKS_v0.3.0.md)
 
@@ -63,7 +53,6 @@
 
 [Release notes](RELEASE_v0.1.0.md) · [Benchmarks](BENCHMARKS.md)
 
-[0.3.1]: https://github.com/ayakacxy/cat-surface-gpu/releases/tag/v0.3.1
 [0.3.0]: https://github.com/ayakacxy/cat-surface-gpu/releases/tag/v0.3.0
 [0.2.0]: https://github.com/ayakacxy/cat-surface-gpu/releases/tag/v0.2.0
 [0.1.0]: https://github.com/ayakacxy/cat-surface-gpu/releases/tag/v0.1.0

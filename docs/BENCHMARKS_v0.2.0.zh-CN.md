@@ -1,4 +1,4 @@
-# 性能报告：v0.2.0
+# v0.2.0 性能与输出比较
 
 [English](BENCHMARKS_v0.2.0.md) · [简体中文](BENCHMARKS_v0.2.0.zh-CN.md)
 

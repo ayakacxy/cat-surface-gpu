@@ -1,4 +1,4 @@
-# 升级指南
+# 版本迁移指南
 
 [English](MIGRATION.md) · [简体中文](MIGRATION.zh-CN.md)
 

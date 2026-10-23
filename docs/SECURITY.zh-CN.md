@@ -1,4 +1,4 @@
-# 安全政策
+# 安全与漏洞报告
 
 [English](SECURITY.md) · [简体中文](SECURITY.zh-CN.md)
 

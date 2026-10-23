@@ -1,4 +1,4 @@
-# Security policy
+# Security and Vulnerability Reporting
 
 [English](SECURITY.md) · [简体中文](SECURITY.zh-CN.md)
 

@@ -1,4 +1,4 @@
-# Reproducing results
+# Reproducibility and Provenance Guide
 
 [English](REPRODUCIBILITY.md) · [简体中文](REPRODUCIBILITY.zh-CN.md)
 

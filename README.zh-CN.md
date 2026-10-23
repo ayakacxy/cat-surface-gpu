@@ -1,14 +1,22 @@
+<div align="center">
+
 # CAT-Surface GPU
 
-[English](README.md) · [简体中文](README.zh-CN.md)
+面向 `CAT_Surf2Sphere` 与 `CAT_SurfWarp` 的 Python 实现，支持 CPU、CUDA 和 Metal。
 
-[![Release](https://img.shields.io/github/v/release/ayakacxy/cat-surface-gpu)](https://github.com/ayakacxy/cat-surface-gpu/releases/latest)
+[![许可证：GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
+[![正式版本](https://img.shields.io/github/v/release/ayakacxy/cat-surface-gpu?display_name=tag&sort=semver)](https://github.com/ayakacxy/cat-surface-gpu/releases/latest)
 [![CI](https://github.com/ayakacxy/cat-surface-gpu/actions/workflows/ci.yml/badge.svg)](https://github.com/ayakacxy/cat-surface-gpu/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/ayakacxy/cat-surface-gpu/actions/workflows/codeql.yml/badge.svg)](https://github.com/ayakacxy/cat-surface-gpu/actions/workflows/codeql.yml)
-[![Python](https://img.shields.io/badge/python-3.11%2B-3776AB.svg)](pyproject.toml)
-[![License](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB.svg?logo=python&logoColor=white)](pyproject.toml)
+[![CUDA / Metal](https://img.shields.io/badge/GPU-CUDA%20%7C%20Metal-76B900.svg)](docs/IMPLEMENTATION.zh-CN.md)
+[![Linux / Windows / macOS](https://img.shields.io/badge/platform-Linux%20%7C%20Windows%20%7C%20macOS-lightgrey.svg)](docs/IMPLEMENTATION.zh-CN.md)
 
-使用 Python 进行皮层曲面球面化与配准，支持 CPU、CUDA 和 Apple Metal。
+[English](README.md) · [文档目录](docs/README.zh-CN.md) · [详细性能报告](docs/BENCHMARKS_v0.3.0.zh-CN.md) · [源码构建](docs/BUILDING.zh-CN.md) · [上游致谢](THIRD_PARTY_NOTICES.zh-CN.md)
+
+⚡ **GPU 加速** · 🧠 **曲面配准** · 🖥️ **跨平台** · 📦 **Python 软件包**
+
+</div>
 
 CAT-Surface GPU 读取 GIFTI 格式的皮层曲面，生成用于表面分析的球面。软件包提供两条命令：
 
@@ -17,11 +25,28 @@ CAT-Surface GPU 读取 GIFTI 格式的皮层曲面，生成用于表面分析的
 
 软件包独立运行，皮层曲面和模板由用户提供。MRI 分割和皮层重建不在本项目范围内。
 
+## ⚡ 性能
+
+在 RTX 2080 Ti 和 Xeon Gold 6230 上，使用 8 个 CPU 线程及 163,842 顶点的 fsaverage 表面，完整命令耗时如下：
+
+| 操作 | 耗时中位数 |
+| --- | ---: |
+| 球面生成 | 2.612 秒 |
+| 球面配准 | 4.983 秒 |
+
+每个数值对应单份表面，是已有缓存条件下三次新进程运行的中位数，包含启动、输入读取、计算和压缩写出。配准使用 40 次 PCG 迭代。输入详情、首次调用耗时和数值对比见[性能报告](docs/BENCHMARKS_v0.3.0.zh-CN.md)。
+
+## 🧩 环境要求
+
+- Python 3.11 或更新版本，建议创建独立环境。
+- CPU 计算支持 Linux、Windows 和 macOS。
+- CUDA 需要 NVIDIA GPU；Metal 需要 Apple Silicon macOS。
+
 <a id="install"></a>
 
-## 安装
+## 🐍 安装
 
-使用 Python 3.11 或更新版本，建议创建独立环境。克隆仓库后，按所需后端安装：
+克隆仓库后，按所需后端安装：
 
 ```bash
 git clone https://github.com/ayakacxy/cat-surface-gpu.git
@@ -40,11 +65,9 @@ CUDA 可选依赖安装适用于 CUDA 12.x 的 CuPy，需要兼容的 NVIDIA 驱
 
 <a id="run"></a>
 
-## 快速开始
+## 🌐 运行 `CAT_Surf2Sphere`
 
 以下示例使用 CUDA。使用其他后端时，将 `--device cuda` 替换为 `--device metal` 或 `--device cpu`。
-
-### 生成球面
 
 ```bash
 cat-surf2sphere-gpu --input-surface white.gii --output-surface sphere.gii --device cuda
@@ -52,7 +75,7 @@ cat-surf2sphere-gpu --input-surface white.gii --output-surface sphere.gii --devi
 
 `white.gii` 应为适合球面映射的闭合三角网格。输出保留输入的三角形索引。
 
-### 配准到模板
+## 🧭 运行 `CAT_SurfWarp`
 
 ```bash
 cat-surfwarp-gpu --source-surface white.gii --source-sphere sphere.gii --target-surface template.white.gii --target-sphere template.sphere.gii --output sphere.reg.gii --device cuda
@@ -74,7 +97,11 @@ cat-surfwarp-gpu --source-surface white.gii --source-sphere sphere.gii --target-
 
 首次运行包含内核编译。拓扑和目标缓存默认保存在工作目录下的 `.work/cat-surface/cache`，可通过 `CAT_SURFACE_CACHE_ROOT` 指定其他位置。
 
-## Python 接口
+## 📦 Python 软件包
+
+wheel 包含 Python 实现和 CUDA、Metal 内核源码，皮层曲面和模板需单独提供。发布附件还包括项目源码包、固定版本的 CAT-Surface 源码、依赖清单和校验文件。
+
+## 🎯 Python 接口
 
 ```python
 from cat_surface_gpu import GiftiSurface, load_gifti_surface, save_gifti_surface, surf_to_sphere
@@ -89,18 +116,18 @@ save_gifti_surface(
 
 配准调用、参数、返回值和数值精度见[接口指南](docs/IMPLEMENTATION.zh-CN.md)。
 
-## 性能
+## 🗂️ 仓库结构
 
-在 RTX 2080 Ti 和 Xeon Gold 6230 上，使用 8 个 CPU 线程及 163,842 顶点的 fsaverage 表面，完整命令耗时如下：
+```text
+src/cat_surface_gpu/          Python 接口、命令及 CPU/CUDA/Metal 后端
+tools/                        性能测试与合成 GIFTI 数据工具
+scripts/                      构建与发行检查工具
+tests/                        CPU、CUDA 和 Metal 测试
+upstream/                     源码记录与上游许可
+docs/                         使用说明、性能记录与版本说明
+```
 
-| 操作 | 耗时中位数 |
-| --- | ---: |
-| 球面生成 | 2.612 秒 |
-| 球面配准 | 4.983 秒 |
-
-每个数值对应单份表面，是已有缓存条件下三次新进程运行的中位数，包含启动、输入读取、计算和压缩写出。配准使用 40 次 PCG 迭代。输入详情、首次调用耗时和数值对比见[性能报告](docs/BENCHMARKS_v0.3.0.zh-CN.md)。
-
-## 文档与支持
+## 🛠️ 文档与支持
 
 - [文档目录](docs/README.zh-CN.md)
 - [接口与实现](docs/IMPLEMENTATION.zh-CN.md)
@@ -108,7 +135,7 @@ save_gifti_surface(
 - [迁移指南](docs/MIGRATION.zh-CN.md)与[更新记录](docs/CHANGELOG.zh-CN.md)
 - [参与开发](docs/CONTRIBUTING.zh-CN.md)、[使用支持](docs/SUPPORT.zh-CN.md)与[安全报告](docs/SECURITY.zh-CN.md)
 
-## 引用与许可
+## 🙏 致谢和许可证
 
 引用本软件时请使用 [CITATION.cff](CITATION.cff)。算法基于 Christian Gaser 开发的 [CAT-Surface](https://github.com/ChristianGaser/CAT-Surface)，其中 DARTEL 源于 John Ashburner 的工作。致谢和源码参考见[第三方说明](THIRD_PARTY_NOTICES.zh-CN.md)。
 

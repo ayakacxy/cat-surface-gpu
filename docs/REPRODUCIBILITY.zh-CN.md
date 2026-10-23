@@ -1,4 +1,4 @@
-# 结果复现
+# 可复现性与来源记录指南
 
 [English](REPRODUCIBILITY.md) · [简体中文](REPRODUCIBILITY.zh-CN.md)
 

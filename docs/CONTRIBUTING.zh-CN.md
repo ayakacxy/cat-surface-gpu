@@ -1,4 +1,4 @@
-# 参与开发
+# 参与 CAT-Surface GPU 开发
 
 [English](CONTRIBUTING.md) · [简体中文](CONTRIBUTING.zh-CN.md)
 

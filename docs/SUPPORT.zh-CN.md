@@ -1,4 +1,4 @@
-# 获取帮助
+# 支持与问题咨询
 
 [English](SUPPORT.md) · [简体中文](SUPPORT.zh-CN.md)
 

@@ -1,17 +1,6 @@
-# 更新记录
+# 项目更新记录
 
 [English](CHANGELOG.md) · [简体中文](CHANGELOG.zh-CN.md)
-
-## [0.3.1] - 2026-10-23
-
-### 文档
-
-- 重写中英文 README、用户指南、开发指南和版本说明。
-- 为已有的 v0.3.0 性能测量增加独立报告。
-- 集中整理版本历史，更新文档链接。
-- 重新构建包含新版文档的发行包，算法和数值行为保持不变。
-
-[版本说明](RELEASE_v0.3.1.zh-CN.md)
 
 ## [0.3.0] - 2026-10-18
 
@@ -27,6 +16,8 @@
 - 使用共享内存分块加速 CUDA 平滑。
 - 特征求解和 DARTEL 使用 FP32，几何装配和最终指数映射保留 FP64。
 - 缓存固定拓扑和目标特征，减少配准内部的重复输入检查。
+
+- 整理中英文使用、开发和性能文档，并同步发行包内的说明。
 
 [版本说明](RELEASE_v0.3.0.zh-CN.md) · [性能报告](BENCHMARKS_v0.3.0.zh-CN.md)
 
@@ -63,7 +54,6 @@
 
 [版本说明](RELEASE_v0.1.0.zh-CN.md) · [性能报告](BENCHMARKS.zh-CN.md)
 
-[0.3.1]: https://github.com/ayakacxy/cat-surface-gpu/releases/tag/v0.3.1
 [0.3.0]: https://github.com/ayakacxy/cat-surface-gpu/releases/tag/v0.3.0
 [0.2.0]: https://github.com/ayakacxy/cat-surface-gpu/releases/tag/v0.2.0
 [0.1.0]: https://github.com/ayakacxy/cat-surface-gpu/releases/tag/v0.1.0

@@ -1,4 +1,4 @@
-# Benchmarks: v0.2.0
+# v0.2.0 Performance and Output Comparisons
 
 [English](BENCHMARKS_v0.2.0.md) · [简体中文](BENCHMARKS_v0.2.0.zh-CN.md)
 

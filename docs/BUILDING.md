@@ -1,4 +1,4 @@
-# Building from source
+# Building from Source
 
 [English](BUILDING.md) · [简体中文](BUILDING.zh-CN.md)
 
@@ -11,7 +11,7 @@ Prebuilt packages are available on the [Releases page](https://github.com/ayakac
 Download the wheel from the release assets, then install it in your Python environment:
 
 ```bash
-python -m pip install ./cat_surface_gpu-0.3.1-py3-none-any.whl
+python -m pip install ./cat_surface_gpu-0.3.0-py3-none-any.whl
 ```
 
 This installs CPU support. For GPU execution, also install `cupy-cuda12x>=13` for CUDA 12 or `mlx>=0.31` for Apple Silicon Metal. See the [backend requirements](../README.md#install).
@@ -67,7 +67,7 @@ The following commands work on all three platforms:
 
 ```bash
 python -m build --outdir .work/build/dist
-python scripts/verify_release.py --wheel .work/build/dist/cat_surface_gpu-0.3.1-py3-none-any.whl
+python scripts/verify_release.py --wheel .work/build/dist/cat_surface_gpu-0.3.0-py3-none-any.whl
 ```
 
 The build produces a wheel and a source archive. The `py3-none-any` wheel is platform-independent; NumPy, Numba, CuPy, and MLX provide their own platform-specific dependencies. The source archive also includes tests, tools, documentation, and license notices. Anatomical surfaces and templates are supplied separately by the user.
@@ -75,7 +75,7 @@ The build produces a wheel and a source archive. The `py3-none-any` wheel is pla
 To check the installed command-line entry points:
 
 ```bash
-python -m pip install --force-reinstall --no-deps .work/build/dist/cat_surface_gpu-0.3.1-py3-none-any.whl
+python -m pip install --force-reinstall --no-deps .work/build/dist/cat_surface_gpu-0.3.0-py3-none-any.whl
 cat-surf2sphere-gpu --help
 cat-surfwarp-gpu --help
 ```
@@ -103,10 +103,10 @@ The script checks the archive hash and prepares:
 
 | Asset | Contents |
 | --- | --- |
-| `cat_surface_gpu-0.3.1-py3-none-any.whl` | Installable Python package |
-| `cat_surface_gpu-0.3.1.tar.gz` | Project source distribution |
+| `cat_surface_gpu-0.3.0-py3-none-any.whl` | Installable Python package |
+| `cat_surface_gpu-0.3.0.tar.gz` | Project source distribution |
 | `CAT-Surface-<commit>.tar.gz` | Pinned algorithm reference source |
-| `cat-surface-gpu-0.3.1.cdx.json` | CycloneDX dependency inventory |
+| `cat-surface-gpu-0.3.0.cdx.json` | CycloneDX dependency inventory |
 | `SHA256SUMS` | SHA-256 hashes of the four assets above |
 
 The reference source archive is distributed for source access and attribution; it is not installed by the wheel. [Third-party notices](../THIRD_PARTY_NOTICES.md) describe its license and role.
