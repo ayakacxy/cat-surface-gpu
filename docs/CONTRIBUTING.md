@@ -1,29 +1,41 @@
-# Contributing to CAT-Surface GPU
+# Contributing
 
 [English](CONTRIBUTING.md) · [简体中文](CONTRIBUTING.zh-CN.md)
 
-Changes should preserve useful numerical results and make their effects easy to reproduce.
+Bug reports, documentation improvements, and code contributions are welcome. For a substantial algorithm or API change, open an issue first to discuss the approach.
 
 ## Development setup
 
-Start with the [README installation steps](../README.md#install), which put temporary files and caches inside the checkout. Then run:
+Use Python 3.11 or newer in a virtual environment. From a source checkout, install the package in editable mode with the development tools:
 
 ```bash
-python -m pip install -e '.[cuda,test]'
-python -m pytest -q --basetemp .work/setup/tmp/pytest
-python scripts/verify_release.py
+python -m pip install -e ".[test]"
 ```
 
-The example installs CUDA support. Use `.[metal,test]` for Metal development or `.[test]` for CPU development. CPU tests require no GPU; CUDA tests require an NVIDIA device, and Metal tests require Apple Silicon macOS. Record skipped tests with the results.
+Use `.[cuda,test]` for NVIDIA CUDA or `.[metal,test]` for Apple Silicon Metal development. See [installation](../README.md#install) for backend requirements and the [build guide](BUILDING.md) for environment and cache setup.
 
-## Algorithm changes
+## Making changes
 
-Describe which upstream operation changes and why. Preserve mesh indexing, supported parameters, and stopping conditions unless the change explicitly calls for a different algorithm. Keep failures visible instead of silently switching to a different implementation.
+Keep each pull request focused on one change. Update the English and Simplified Chinese documentation together. New code comments and docstrings use Chinese; retain third-party notices in their original language.
 
-Before reporting an improvement, compare the same inputs and settings. Include triangle equality, coordinate errors, solver choice, precision, timing scope, repetitions, and peak memory. See [reproducibility](REPRODUCIBILITY.md) for the details. Never commit anatomical or identifiable medical data.
+For algorithm changes, describe the effect on mesh indexing, solver settings, precision, and stopping conditions. Compare results using the same input surfaces and parameters. Include topology checks and numerical errors; performance claims also need hardware, timing scope, cache state, and repeated measurements. See [Reproducibility](REPRODUCIBILITY.md) for the comparison procedure.
 
-New code comments and docstrings use Chinese. Preserve third-party copyright and license notices in their original language. User documentation is available in English and Simplified Chinese.
+Do not add patient data, access credentials, local caches, or generated build files to the repository. Credit adapted code and preserve its license notices.
 
-## Pull requests
+## Checking your work
 
-Keep changes focused and describe the resulting behavior, relevant numerical differences, and tests run. If a test needs an unavailable GPU or private fixture, say so. Identify the source of adapted code and retain the relevant author and license notices.
+Run the checks relevant to the change. Documentation-only changes need link and example review; they do not require GPU tests.
+
+For code changes, the standard checks are:
+
+```bash
+ruff check src tests tools scripts setup.py
+ruff format --check src tests tools scripts setup.py
+python -m pytest -q --basetemp .work/setup/tmp/pytest -o cache_dir=.work/setup/cache/pytest
+```
+
+Backend-specific changes also need tests on the affected hardware. If that hardware is unavailable, state which checks you could not run. For packaging changes, follow the [build guide](BUILDING.md).
+
+## Opening a pull request
+
+Explain the problem, the resulting behavior, and how you checked it. Link related issues and include any relevant numerical or performance results. The [pull request template](../.github/pull_request_template.md) provides a short outline.

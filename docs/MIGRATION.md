@@ -1,50 +1,54 @@
-# Version Migration Guide
+# Migration guide
 
 [English](MIGRATION.md) · [简体中文](MIGRATION.zh-CN.md)
 
-## v0.2.0 → v0.3.0
+For a new installation, start with the [README](../README.md#install). This guide covers changes that affect existing scripts and environments.
 
-- CLI names, file arguments and CUDA array APIs are retained. The default device remains `cuda`.
-- New devices are `--device cpu`, `--device metal` and `--device auto`. Install `.[metal]` for Metal or the base dependencies for CPU.
-- Use `surf_to_sphere(..., device=...)` for spherical inflation and `surfwarp_cupy(..., backend="cpu" | "cupy" | "metal")` for registration.
-- CUDA and Metal feature solves and DARTEL use FP32; final exponentiation remains FP64. See [v0.3.0 release notes](RELEASE_v0.3.0.md) for numerical differences and benchmarks.
+## From v0.2 to v0.3
 
-## v0.1.0 → v0.2.0
+Command names, file arguments, and CUDA array APIs remain compatible. The default device is still `cuda`; existing CUDA commands do not need a new device argument.
 
-Version 0.2.0 replaces the earlier PyTorch/Triton implementation and CAT helper programs with a native Python implementation using NumPy, Numba, and CuPy. Install it in a separate environment when keeping v0.1.0 available for comparisons.
+CPU and Apple Metal are now available for the complete workflow:
 
-### Dependencies and files
+| Backend | Installation from a checkout | CLI option |
+| --- | --- | --- |
+| CPU | `python -m pip install .` | `--device cpu` |
+| NVIDIA CUDA | `python -m pip install ".[cuda]"` | `--device cuda` or `--device cuda:N` |
+| Apple Metal | `python -m pip install ".[metal]"` | `--device metal` |
 
-| v0.1.0 | v0.2.0 |
-| --- | --- |
-| PyTorch and Triton | NumPy, SciPy, Numba, nibabel, and CuPy |
-| Bundled CAT reference/helper executables | No bundled CAT executables or project-specific native extensions |
-| Linux platform wheel | Python-only `py3-none-any` wheel; CUDA runtime still required |
-| CAT-Surface `628b6851` | CAT-Surface `b0c2aa23` |
+`--device auto` selects an available GPU, or CPU if no supported GPU is available. Explicit device selection reports an error when that backend is unavailable.
 
-The package runs independently. Supply your own GIFTI surfaces and template.
+### Python calls
 
-### Commands
+Use `surf_to_sphere(..., device="cuda")` for inflation. Accepted device values are `cpu`, `cuda`, `metal` and `auto`. `surf_to_sphere_cupy(...)` remains available for existing CUDA code.
 
-The main command names and input/output file arguments are retained:
+Registration uses `surfwarp_cupy(..., backend="cupy")`, with `cpu`, `cupy` and `metal` as the accepted backend values. The CUDA backend name is `cupy`, and this function does not accept `auto`. Metal requires PCG with `pcg_check_interval=0`, which is the default. See the [Python API](IMPLEMENTATION.md) for complete examples and result fields.
 
-- `cat-surf2sphere-gpu --input-surface ... --output-surface ...`
-- `cat-surfwarp-gpu --source-surface ... --source-sphere ... --target-surface ... --target-sphere ... --output ...`
+### Numerical results
 
-Remove v0.1.0 backend options such as `--kernel triton`, `--dtype`, `--preprocess-kernel`, `--areal-schedule`, `--areal-arithmetic`, `--rotation-feature-backend`, `--stencil-threads`, `--dartel-dtype`, `--squaring-kernel`, and `--cuda-graph`. They do not select backends in v0.2.0. Use `--threads` for CPU work and `--solver-backend` / `--solver-iterations` for the registration solver.
+The default CUDA path now uses FP32 feature solves and DARTEL updates, while final velocity exponentiation remains FP64. Optimized kernels and cache reuse also change runtime. Numerical differences and same-input timing comparisons are reported in the [v0.3 benchmarks](BENCHMARKS_v0.3.0.md).
 
-`--average` and its `--avg` alias enable averaging, which is already enabled by default. `--no-average` disables it. Initial rotation is enabled by default and can be disabled with `--no-rotate`.
+## From v0.1
 
-The old standalone rotation command is not provided. Rotation is part of `cat-surfwarp-gpu`. See the current [README examples](../README.md#run).
+The Python package no longer needs PyTorch, Triton, or CAT helper executables. Its base dependencies are NumPy, SciPy, Numba, and nibabel; GPU support is installed through the CUDA or Metal extra. Use a separate environment if you need to keep the original implementation available for comparison.
 
-### Python API
+### Command-line changes
 
-Replace `run_cat_surf2sphere_gpu` with `surf_to_sphere_cupy` and `run_cat_surface_gpu_pipeline` with `surfwarp_cupy`. The new functions operate on vertex and triangle arrays and use `Surf2SphereParameters` or `SurfWarpParameters`. They are not drop-in wrappers for the earlier file-oriented functions. See [API examples](IMPLEMENTATION.md).
+The two main command names and their file arguments are unchanged:
 
-### Results and performance
+```text
+cat-surf2sphere-gpu --input-surface ... --output-surface ...
+cat-surfwarp-gpu --source-surface ... --source-sphere ... --target-surface ... --target-sphere ... --output ...
+```
 
-Both the upstream source revision and the implementation changed. The default v0.2.0 DARTEL solver uses 40 PCG iterations, whereas the official reference uses FMG. Keep v0.1.0 thresholds and timings attached to v0.1.0; establish new tolerances from same-input comparisons against the v0.2.0 reference revision.
+Remove the old options `--kernel`, `--dtype`, `--preprocess-kernel`, `--areal-schedule`, `--areal-arithmetic`, `--rotation-feature-backend`, `--stencil-threads`, `--dartel-dtype`, `--squaring-kernel`, and `--cuda-graph`. Select a backend with `--device`, CPU threads with `--threads`, and the registration solver with `--solver-backend` and `--solver-iterations`.
 
-The historical 55.2573-second bilateral measurement describes the v0.1.0 CAT registration chain. Measured v0.2.0 command timings and output differences are recorded in the [v0.2.0 benchmarks](BENCHMARKS_v0.2.0.md).
+Initial rotation and averaging are enabled by default. `--no-rotate` and `--no-average` disable them; `--avg` is an alias for `--average`. Rotation is part of `cat-surfwarp-gpu`; there is no separate rotation command.
 
-[Documentation index](README.md) · [Project README](../README.md)
+### Python and reference changes
+
+The file-oriented functions `run_cat_surf2sphere_gpu` and `run_cat_surface_gpu_pipeline` were replaced by array APIs. Load GIFTI files with `load_gifti_surface`, call `surf_to_sphere` or `surfwarp_cupy`, and write results with `save_gifti_surface`. See the [API guide](IMPLEMENTATION.md).
+
+The algorithm reference changed from CAT-Surface `628b6851` to `b0c2aa23`, and the default registration solver is PCG rather than the reference FMG. Compare outputs on the same inputs when updating a numerical baseline. Original release records remain available in the [changelog](CHANGELOG.md).
+
+[Documentation](README.md) · [Project README](../README.md)

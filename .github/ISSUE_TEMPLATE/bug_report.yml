@@ -1,43 +1,43 @@
-name: Bug report / 缺陷报告
-description: Report a reproducible correctness, installation, or runtime problem. / 报告可复现的计算结果、安装或运行问题。
-title: "[Bug / 缺陷]: "
+name: Bug report
+description: Report an installation, runtime, or numerical problem.
+title: "[Bug]: "
 labels: [bug]
 body:
   - type: markdown
     attributes:
-      value: Do not attach identifiable medical data. Use synthetic or anonymized inputs. / 不要附加可识别身份的医学数据，请使用合成或匿名化的输入。
+      value: Search existing issues first. Use synthetic inputs and remove patient data, identifying information, and credentials from attachments.
   - type: textarea
     id: summary
     attributes:
-      label: Summary / 问题概要
-      description: What happened and what did you expect? / 实际发生了什么？你预期的结果是什么？
+      label: What happened?
+      description: Describe the observed behavior and what you expected.
     validations:
       required: true
   - type: textarea
     id: environment
     attributes:
-      label: Environment / 运行环境
-      description: Include OS, GPU, driver, Python, backend, CuPy or MLX, NumPy, Numba, and package version. / 请提供操作系统、GPU、驱动、Python、后端、CuPy 或 MLX、NumPy、Numba 和本软件包版本。
+      label: Environment
+      description: Include the package version, OS, Python, CPU or GPU, and selected backend. For GPU issues, include the driver and CuPy or MLX version.
     validations:
       required: true
   - type: textarea
     id: command
     attributes:
-      label: Reproduction command / 复现命令
+      label: Steps to reproduce
+      description: Provide the command or a minimal script, input surface sizes, and relevant settings.
       render: shell
     validations:
       required: true
   - type: textarea
     id: logs
     attributes:
-      label: Error output / 报错信息
+      label: Error output
+      description: Include the complete traceback or relevant log output.
       render: text
   - type: checkboxes
     id: checks
     attributes:
-      label: Safety checks / 提交前检查
+      label: Before submitting
       options:
-        - label: I removed personal, clinical, and identifiable data. / 我已移除个人、临床及可识别身份的数据。
-          required: true
-        - label: I confirmed that the selected CUDA or Metal backend was available if this is a GPU report. / 如果这是 GPU 相关报告，我已确认运行环境能够访问所选 CUDA 或 Metal 设备。
+        - label: I removed patient data, identifying information, and credentials.
           required: true

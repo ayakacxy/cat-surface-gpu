@@ -1,12 +1,10 @@
-# v0.2.0 Performance and Output Comparisons
+# Benchmarks: v0.2.0
 
 [English](BENCHMARKS_v0.2.0.md) · [简体中文](BENCHMARKS_v0.2.0.zh-CN.md)
 
-This page documents v0.2.0. See the [v0.3.0 notes](RELEASE_v0.3.0.md) for current platform support, installation and benchmarks.
+Measured on 2026-10-13 using the released wheel and the unmodified CAT-Surface CPU reference at `b0c2aa2395ea4957a331b9444fb54c7716b6572d`. Individual runs, parameters, input hashes and output comparisons are available in the [JSON record](benchmark-v0.2.0.json).
 
-These measurements use the released **v0.2.0** wheel and the unmodified CAT-Surface CPU reference at commit `b0c2aa2395ea4957a331b9444fb54c7716b6572d`. The results below were recorded on **2026-10-13**. Historical PyTorch/Triton measurements remain in the [v0.1.0 benchmarks](BENCHMARKS.md).
-
-## Environment and workload
+## Environment and inputs
 
 | Item | Value |
 | --- | --- |
@@ -17,48 +15,46 @@ These measurements use the released **v0.2.0** wheel and the unmodified CAT-Surf
 | CUDA runtime | 12.6 |
 | Numba CPU threads | 8 |
 | CPU reference build | GCC 9.4.0, `-O2 -fPIC`, static libraries |
-| Inputs | Public fsaverage templates; 163,842 vertices and 327,680 triangles each |
+| Input surfaces | Public fsaverage templates, 163,842 vertices and 327,680 triangles each |
 | Sphere settings | `stop_at=10`, all 4,999 area-smoothing sweeps |
-| Registration settings | `steps=2`, `runs=2`, averaging and rotation enabled, `512 x 256` map, type-5 features |
-| GPU registration solver | Default PCG with 40 iterations; FMG measured separately |
+| Registration settings | `steps=2`, `runs=2`, averaging and rotation enabled, `512 × 256` map, type-5 features |
+| GPU solver | Default PCG with 40 iterations; FMG measured separately |
 
-Sphere generation uses `lh.white.gii`. Registration maps the fixed LH white/sphere pair to the fixed RH white/sphere pair. Both implementations receive the same files. The components are measured separately, with no generated-sphere chain or bilateral concurrency.
+Sphere generation uses `lh.white.gii`. Registration maps the supplied LH white/sphere pair to the supplied RH white/sphere pair. Both implementations receive the same files. These are separate single-surface measurements, rather than a workflow that passes the generated sphere into registration.
 
-The C reference uses its unmodified internal threading. CPU and GPU clocks were not controlled by the benchmark; retain the measured ranges when estimating runtime.
+The C reference uses its internal threading unchanged. CPU and GPU clocks were not fixed during measurement.
 
-## Complete command timings
+## Complete command times
 
-Each row reports **three fresh-process runs** after the first GPU invocation. Disk kernel caches and OS input-file caches are populated. Timings cover process startup, imports, input reading, CPU preparation, CUDA initialization, compilation or cache loading, computation, transfer, and GIFTI writing. Reference compilation, package installation, and output validation are excluded. CPU/GPU order alternates between rounds.
+The table reports three fresh-process runs after the first GPU invocation, with populated kernel and input-file caches. Versions alternate order between rounds. Timings cover process startup, imports, reading, preparation, CUDA initialization, cache loading or compilation, computation, transfer and GIFTI writing. Reference compilation, package installation and output comparison are excluded.
 
-| Component | CPU median | GPU median | CPU/GPU time ratio | CPU range | GPU range |
+| Component | CPU median | GPU median | CPU/GPU ratio | CPU range | GPU range |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| `CAT_Surf2Sphere` | 216.722 s | 10.340 s | 20.96x | 212.922–263.969 s | 9.907–13.642 s |
-| `CAT_SurfWarp`, default PCG | 182.182 s | 32.550 s | 5.60x | 180.606–186.225 s | 28.075–35.514 s |
-| `CAT_SurfWarp`, FMG | 182.182 s | 164.697 s | 1.11x | 180.606–186.225 s | 129.926–179.939 s |
+| Sphere generation | 216.722 s | 10.340 s | 20.96× | 212.922–263.969 s | 9.907–13.642 s |
+| Registration, default PCG | 182.182 s | 32.550 s | 5.60× | 180.606–186.225 s | 28.075–35.514 s |
+| Registration, FMG | 182.182 s | 164.697 s | 1.11× | 180.606–186.225 s | 129.926–179.939 s |
 
-The CPU reference uses FMG. The default GPU PCG row compares the complete default workflows; its ratio includes the effect of different solvers and does not isolate GPU hardware acceleration. Selecting GPU FMG does not make the Python implementation numerically identical to the C reference.
+The CPU reference uses FMG. Its comparison with default GPU PCG includes a solver change as well as the implementation change. GPU FMG follows the same solver family but does not produce numerically identical results to the C reference.
 
-First GPU invocations took **17.766 s** for sphere generation, **48.985 s** for PCG registration, and **130.208 s** for FMG registration. A new task cache was used, with only setup imports and an integer-vector CUDA preflight before the first sphere call; the surface kernels had not been warmed. PCG and then FMG used the same cache. These first calls are excluded from the medians and are not independent cold-cache measurements for each solver. Repeated timings still include imports and any compilation required by a fresh process.
+First GPU calls took **17.766 seconds** for sphere generation, **48.985 seconds** for PCG registration and **130.208 seconds** for FMG registration. They used one newly created application cache in that order, after setup imports and an integer-vector CUDA check. Later first calls could reuse earlier kernel compilation, so these are not three independent cold-cache measurements. They are excluded from the medians.
 
-## Output differences
+## Output comparison
 
-CPU/GPU outputs retain the input triangle arrays exactly, have finite coordinates, and contain no zero-area triangles. The table reports the largest statistic observed across the three comparisons. Coordinate units are those stored in the GIFTI files.
+Triangle arrays match exactly, all coordinates are finite and no zero-area triangles occur. Each cell below gives the largest statistic observed across the three comparisons. Coordinate differences are per array element; vertex distances are Euclidean distances between corresponding points. Both use the GIFTI coordinate units.
 
-| Component | Max / mean / p99 absolute coordinate difference | Max / mean / p99 vertex distance |
+| Component | Absolute coordinate difference: max / mean / p99 | Vertex distance: max / mean / p99 |
 | --- | ---: | ---: |
-| `CAT_Surf2Sphere` | 0.057757 / 0.018752 / 0.050117 | 0.062416 / 0.036491 / 0.061337 |
-| `CAT_SurfWarp`, PCG | 0.166157 / 0.012807 / 0.096529 | 0.166649 / 0.027569 / 0.122179 |
-| `CAT_SurfWarp`, FMG | 0.165802 / 0.012483 / 0.095415 | 0.166345 / 0.026878 / 0.122087 |
+| Sphere generation | 0.057757 / 0.018752 / 0.050117 | 0.062416 / 0.036491 / 0.061337 |
+| Registration, PCG | 0.166157 / 0.012807 / 0.096529 | 0.166649 / 0.027569 / 0.122179 |
+| Registration, FMG | 0.165802 / 0.012483 / 0.095415 | 0.166345 / 0.026878 / 0.122087 |
 
-Absolute coordinate differences are computed per array element. Vertex distances are Euclidean distances between corresponding 3D vertices. The GPU smoothing uses colored independent vertex groups, whereas the reference updates vertices in its serial order. The implementations and solvers can therefore produce different coordinates. These results report the observed differences; they do not establish equivalent anatomical registration accuracy or reuse the v0.1.0 error threshold.
-
-The [JSON record](benchmark-v0.2.0.json) includes individual times, parameters, input and implementation hashes, reference-program hashes, and all output comparisons. The tested GPU source matches the released wheel. These times cover the specified CAT commands, not the complete CHARM workflow.
+GPU smoothing updates independent vertex groups, whereas the C reference updates vertices serially. This update order and the solver differences affect the coordinates. These measurements compare geometry; they do not establish equivalent anatomical registration accuracy.
 
 ## Reproduce the comparison
 
-Use the benchmark script from the current repository checkout with an installed v0.2.0 package. The script was added after the release; it is not in the original v0.2.0 source archive. Supply the public templates or your own suitable GIFTI inputs.
+Install the v0.2.0 package, then use `tools/benchmark_cat_surface.py` from the current repository. The script was added after publication and is absent from the original source archive.
 
-Set project-local temporary and cache paths, then build the pinned CPU reference. GNU Autotools, a C compiler, Make, and the GitHub CLI are needed for this example:
+The following Linux example requires GNU Autotools, a C compiler, Make and the GitHub CLI. It stores the reference source, build files and caches under `.work/performance`.
 
 ```bash
 mkdir -p .work/performance/{tmp,cache/pip,cache/numba,cache/cupy,cache/cuda,source}
@@ -87,7 +83,7 @@ CAT_REFERENCE_ROOT="$PWD/.work/performance/source/CAT-Surface-b0c2aa2395ea4957a3
 )
 ```
 
-Run the complete command comparison:
+Run the comparison with public fsaverage templates or your own suitable GIFTI files:
 
 ```bash
 python tools/benchmark_cat_surface.py \
@@ -101,4 +97,4 @@ python tools/benchmark_cat_surface.py \
   --repeats 3 --threads 8 --include-fmg
 ```
 
-The output directory must not already exist. The script writes a checkpoint after each command and reports triangle equality, coordinate differences, and each solver's times. `--include-fmg` adds the separate FMG comparison. Input files are not modified.
+The results directory must not already exist. The script records each completed command and compares triangle indices and coordinates. `--include-fmg` adds the separate FMG measurement. Input files are not modified.

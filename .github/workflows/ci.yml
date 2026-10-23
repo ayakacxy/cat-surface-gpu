@@ -60,7 +60,7 @@ jobs:
       - name: Build wheel and source archive
         run: python -m build --outdir .work/ci/dist
       - name: Verify wheel contents
-        run: python scripts/verify_release.py --wheel .work/ci/dist/cat_surface_gpu-0.3.0-py3-none-any.whl
+        run: python scripts/verify_release.py --wheel .work/ci/dist/cat_surface_gpu-0.3.1-py3-none-any.whl
       - name: Test installed command-line interfaces
         run: |
           python -m pip install --force-reinstall --no-deps .work/ci/dist/*.whl

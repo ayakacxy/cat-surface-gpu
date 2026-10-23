@@ -1,17 +1,19 @@
-# Security and Vulnerability Reporting
+# Security policy
 
 [English](SECURITY.md) · [简体中文](SECURITY.zh-CN.md)
 
 ## Supported versions
 
-Security fixes are provided for the latest release on the default branch.
+Security fixes target the latest stable release. Update to the latest release before reporting an issue that may already have been fixed.
 
 ## Reporting a vulnerability
 
-Please use GitHub's private vulnerability reporting for this repository. Do not open a public issue for an unpatched vulnerability and do not include access tokens, private paths, medical images, or identifiable subject data.
+Use [GitHub private vulnerability reporting](https://github.com/ayakacxy/cat-surface-gpu/security/advisories/new). Do not disclose an unpatched vulnerability in a public issue.
 
-Include the affected version, environment, reproduction steps, impact, and any proposed mitigation. You should receive an acknowledgement within seven days. Public disclosure will be coordinated after a fix is available.
+Include the affected version, environment, reproduction steps, and expected impact. Use synthetic inputs and remove credentials and personal data from logs. A minimal reproduction or suggested fix is helpful.
 
-## Scope
+The maintainers will review the report and coordinate a fix and public disclosure with the reporter.
 
-The package reads GIFTI surfaces with nibabel and processes them using NumPy/Numba, CuPy CUDA or MLX Metal. Versions 0.2.0 and 0.3.0 do not bundle CAT executables. The project does not collect telemetry or upload input data.
+## Data handling
+
+CAT-Surface GPU processes surface files locally. It does not collect telemetry or upload input data. GIFTI files are read through nibabel; computation uses NumPy/Numba, CuPy, or MLX, depending on the selected backend.

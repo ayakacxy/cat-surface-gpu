@@ -2,66 +2,113 @@
 
 [English](BUILDING.md) · [简体中文](BUILDING.zh-CN.md)
 
-0.3.0 发布的是 Python 源码。构建软件包时不会编译或附带 CAT-Surface 可执行文件、本项目专用的原生扩展或 CUDA 二进制文件。Numba、CuPy 和 MLX 会在相应函数运行时编译内核。
+本项目使用 setuptools 构建，要求 Python 3.11 或更新版本。wheel 包含 Python 模块和内嵌的 CUDA/Metal 内核源码，由相应后端库在运行时编译内核。构建 wheel 本身不需要 GPU 或 C/C++ 编译器。
 
-## 构建 wheel 和源码包
+预构建软件包可从[发布页面](https://github.com/ayakacxy/cat-surface-gpu/releases/latest)下载。
 
-使用 Python 3.11 或更新版本，在仓库根目录运行：
+## 安装发布的 wheel
 
-```bash
-mkdir -p .work/package/{tmp,cache/pip,cache/numba,cache/cupy,dist}
-export TMPDIR="$PWD/.work/package/tmp" TMP="$PWD/.work/package/tmp" TEMP="$PWD/.work/package/tmp"
-export XDG_CACHE_HOME="$PWD/.work/package/cache"
-export PIP_CACHE_DIR="$PWD/.work/package/cache/pip"
-export NUMBA_CACHE_DIR="$PWD/.work/package/cache/numba"
-export CUPY_CACHE_DIR="$PWD/.work/package/cache/cupy"
-
-python -m pip install build
-python -m build --outdir .work/package/dist
-```
-
-wheel 使用 `py3-none-any` 标记，因为本项目没有随包发布的编译扩展。按所选后端安装依赖：CUDA 使用 CuPy 与 NVIDIA 驱动，Apple Metal 使用 MLX，CPU 使用基础依赖。
-
-安装 wheel 和 CUDA 12.x 对应依赖：
+从发布附件下载 wheel 后，在 Python 环境中安装：
 
 ```bash
-python -m pip install .work/package/dist/cat_surface_gpu-0.3.0-py3-none-any.whl
-python -m pip install 'cupy-cuda12x>=13'
+python -m pip install ./cat_surface_gpu-0.3.1-py3-none-any.whl
 ```
 
-源码包包含 Python 实现、内嵌 CUDA 和 Metal 内核源码、测试、文档和署名说明，不包含解剖输入数据或模板。
+这会安装 CPU 支持。GPU 计算还需要相应依赖：CUDA 12 使用 `cupy-cuda12x>=13`，Apple Silicon Metal 使用 `mlx>=0.31`。具体要求见[后端安装说明](../README.zh-CN.md#install)。
 
-## 检查软件包
+## 准备环境
+
+克隆仓库，进入项目目录并创建虚拟环境：
+
+```bash
+git clone https://github.com/ayakacxy/cat-surface-gpu.git
+cd cat-surface-gpu
+python -m venv .venv
+```
+
+Linux 或 macOS：
+
+```bash
+source .venv/bin/activate
+mkdir -p .work/build/{tmp,cache,dist}
+export TMPDIR="$PWD/.work/build/tmp" TMP="$PWD/.work/build/tmp" TEMP="$PWD/.work/build/tmp"
+export XDG_CACHE_HOME="$PWD/.work/build/cache"
+export PIP_CACHE_DIR="$XDG_CACHE_HOME/pip"
+export NUMBA_CACHE_DIR="$XDG_CACHE_HOME/numba"
+export CUPY_CACHE_DIR="$XDG_CACHE_HOME/cupy"
+export CAT_SURFACE_CACHE_ROOT="$XDG_CACHE_HOME/cat-surface"
+```
+
+Windows PowerShell：
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+$buildDir = Join-Path (Get-Location) ".work/build"
+New-Item -ItemType Directory -Force "$buildDir/tmp", "$buildDir/cache", "$buildDir/dist" | Out-Null
+$env:TMPDIR = $env:TMP = $env:TEMP = "$buildDir/tmp"
+$env:XDG_CACHE_HOME = "$buildDir/cache"
+$env:PIP_CACHE_DIR = "$buildDir/cache/pip"
+$env:NUMBA_CACHE_DIR = "$buildDir/cache/numba"
+$env:CUPY_CACHE_DIR = "$buildDir/cache/cupy"
+$env:CAT_SURFACE_CACHE_ROOT = "$buildDir/cache/cat-surface"
+```
+
+以上设置将临时文件、指定的缓存和发布归档保存在 `.work/build`。接着安装开发依赖：
+
+```bash
+python -m pip install -e ".[test]"
+```
+
+基础安装支持 CPU 运行。Linux 或 Windows 上使用 NVIDIA CUDA 时增加 `.[cuda]`；Apple Silicon macOS 使用 `.[metal]`。各后端的要求见[安装指南](../README.zh-CN.md#install)。
+
+## 构建与检查软件包
+
+以下命令适用于三个平台：
+
+```bash
+python -m build --outdir .work/build/dist
+python scripts/verify_release.py --wheel .work/build/dist/cat_surface_gpu-0.3.1-py3-none-any.whl
+```
+
+构建生成 wheel 和源码归档。`py3-none-any` wheel 本身与平台无关；NumPy、Numba、CuPy 和 MLX 各自提供平台相关依赖。源码归档还包含测试、工具、文档和许可说明。解剖表面及模板由用户另行提供。
+
+检查安装后的命令行入口：
+
+```bash
+python -m pip install --force-reinstall --no-deps .work/build/dist/cat_surface_gpu-0.3.1-py3-none-any.whl
+cat-surf2sphere-gpu --help
+cat-surfwarp-gpu --help
+```
+
+## 开发检查
 
 ```bash
 python scripts/verify_release.py
-python -m pytest -q --basetemp .work/package/tmp/pytest
+python -m ruff check src tests tools scripts setup.py
+python -m ruff format --check src tests tools scripts setup.py
+python -m pytest -q --basetemp .work/build/pytest -o cache_dir=.work/build/cache/pytest
 ```
 
-CPU 测试和归档内容检查无需 GPU。CUDA 测试需要 NVIDIA GPU；Metal 测试需要 Apple Silicon macOS 和 MLX。测试输出会列出跳过项。数值比较与性能测试方法见[复现说明](REPRODUCIBILITY.zh-CN.md)。
+具备相应硬件和后端时，GPU 测试会正常运行；否则 pytest 将其报告为跳过。CI 在 Linux、Windows 和 macOS 上执行 CPU 测试、软件包检查和命令行检查。数值比较与计时方法见[复现指南](REPRODUCIBILITY.zh-CN.md)。
 
-## 整理发行文件
+## 整理发布附件
 
-将 `UPSTREAM.lock` 指定的 CAT-Surface 源码归档放在 `.work/package/source/` 下。完成上述 wheel 和源码包构建后，运行：
+构建 wheel 和源码归档后，将 [UPSTREAM.lock](../UPSTREAM.lock) 指定的 CAT-Surface 源码归档放到 `.work/build/source/`，然后运行：
 
 ```bash
-python scripts/build_release_artifacts.py \
-  --upstream-archive .work/package/source/CAT-Surface-b0c2aa2395ea4957a331b9444fb54c7716b6572d.tar.gz \
-  --dist .work/package/dist
+python scripts/build_release_artifacts.py --upstream-archive .work/build/source/CAT-Surface-b0c2aa2395ea4957a331b9444fb54c7716b6572d.tar.gz --dist .work/build/dist
 ```
 
-脚本先将上游源码归档的 SHA-256 与 `UPSTREAM.lock` 对照，再整理以下五个发行文件：
+脚本核对归档哈希后，整理以下文件：
 
-- Python wheel；
-- 本项目源码包；
-- 固定版本的 CAT-Surface 源码包；
-- CycloneDX 依赖清单；
-- 记录以上四个文件校验值的 `SHA256SUMS`。
+| 附件 | 内容 |
+| --- | --- |
+| `cat_surface_gpu-0.3.1-py3-none-any.whl` | 可安装的 Python 软件包 |
+| `cat_surface_gpu-0.3.1.tar.gz` | 本项目源码包 |
+| `CAT-Surface-<commit>.tar.gz` | 固定版本的算法参考源码 |
+| `cat-surface-gpu-0.3.1.cdx.json` | CycloneDX 依赖清单 |
+| `SHA256SUMS` | 以上四个附件的 SHA-256 校验值 |
 
-上游源码归档单独提供，用于查阅来源，不会随 wheel 安装。v0.3.0 不提供 Linux 可执行文件包。[源码清单](../upstream/SOURCE_MANIFEST.json)记录了本次发布的 Python 模块哈希。
+参考源码归档用于提供源码及署名信息，不会随 wheel 安装。其许可和用途见[第三方说明](../THIRD_PARTY_NOTICES.zh-CN.md)。
 
-## 重新构建 v0.1.0
-
-旧版包含四个 Linux 可执行文件，构建方法也与本版不同。如需复现这些程序，请在单独的检出目录中使用旧版源码和 [v0.1.0 标签中的原始构建说明（英文历史文件）](https://github.com/ayakacxy/cat-surface-gpu/blob/v0.1.0/docs/BUILDING.md)。v0.3.0 软件包不使用这些程序。
-
-[返回文档目录](README.zh-CN.md) · [返回项目首页](../README.zh-CN.md)
+[文档目录](README.zh-CN.md) · [项目首页](../README.zh-CN.md)

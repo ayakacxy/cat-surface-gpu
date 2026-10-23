@@ -2,33 +2,33 @@
 
 [English](THIRD_PARTY_NOTICES.md) · [简体中文](THIRD_PARTY_NOTICES.zh-CN.md)
 
-## CAT-Surface
+CAT-Surface GPU is distributed under [GPL-3.0-or-later](LICENSE). Upstream components retain their copyright and license notices.
 
-The algorithms derive from [CAT-Surface](https://github.com/ChristianGaser/CAT-Surface), developed by Christian Gaser at Jena University Hospital.
+## CAT-Surface and DARTEL
 
-| Release | Fixed upstream revision |
+The spherical inflation and registration algorithms are based on [CAT-Surface](https://github.com/ChristianGaser/CAT-Surface), developed by Christian Gaser at Jena University Hospital. The reference revision is [`b0c2aa2395ea4957a331b9444fb54c7716b6572d`](https://github.com/ChristianGaser/CAT-Surface/tree/b0c2aa2395ea4957a331b9444fb54c7716b6572d), recorded in [UPSTREAM.lock](UPSTREAM.lock).
+
+The reference sources include `Progs/CAT_Surf2Sphere.c`, `Progs/CAT_SurfWarp.c`, and `Lib/CAT_SurfWarpDartel.c`. DARTEL originates from John Ashburner's work in SPM and is distributed with CAT-Surface under its applicable GPL terms.
+
+CAT-Surface's original code is licensed under GPL-2.0-or-later, with a separate commercial license available from its copyright holder. The commercial option does not cover third-party components. The original notice, including component-specific terms, is preserved in [upstream/CAT-Surface-LICENSE.txt](upstream/CAT-Surface-LICENSE.txt).
+
+The package contains Python code and inline GPU kernels. It does not bundle CAT-Surface executables or the full upstream source tree. The pinned upstream source archive is provided separately with release downloads. Source hashes and adaptation records are kept in [upstream/](upstream/), including the [source manifest](upstream/SOURCE_MANIFEST.json).
+
+## External dependencies
+
+The following libraries are installed separately and retain their respective licenses:
+
+| Library | Use |
 | --- | --- |
-| v0.3.0 / v0.2.0 | [`b0c2aa2395ea4957a331b9444fb54c7716b6572d`](https://github.com/ChristianGaser/CAT-Surface/tree/b0c2aa2395ea4957a331b9444fb54c7716b6572d) |
-| v0.1.0 | [`628b6851d8638f3ab773cd25c0ec406d0ec61ede`](https://github.com/ChristianGaser/CAT-Surface/tree/628b6851d8638f3ab773cd25c0ec406d0ec61ede) |
+| [NumPy](https://github.com/numpy/numpy) | Array operations |
+| [SciPy](https://github.com/scipy/scipy) | Scientific routines and spatial queries |
+| [Numba](https://github.com/numba/numba) | CPU kernel compilation |
+| [nibabel](https://github.com/nipy/nibabel) | GIFTI input and output |
+| [CuPy](https://github.com/cupy/cupy) | NVIDIA CUDA backend |
+| [MLX](https://github.com/ml-explore/mlx) | Apple Silicon Metal backend |
 
-The relevant reference sources include `Progs/CAT_Surf2Sphere.c`, `Progs/CAT_SurfWarp.c`, and `Lib/CAT_SurfWarpDartel.c`. The DARTEL implementation originates from John Ashburner's work in SPM and is distributed within CAT-Surface under its applicable GPL terms.
+[SimNIBS](https://github.com/simnibs/simnibs) uses CAT-Surface tools in its cortical surface registration workflow. SimNIBS is not redistributed by this package.
 
-CAT-Surface original code is available under GPL-2.0-or-later or a separate commercial license from its copyright holder. The copied notice is at [upstream/CAT-Surface-LICENSE.txt](upstream/CAT-Surface-LICENSE.txt). Third-party components within the upstream source retain their own licenses.
+## Earlier distributions
 
-Versions 0.2.0 and 0.3.0 include Python and inline GPU kernel source; the package contains no CAT-Surface executables, native helper programs, or full upstream source tree. The release separately provides the pinned upstream source archive for reference and attribution. See [UPSTREAM.lock](UPSTREAM.lock) and the [source manifest](upstream/SOURCE_MANIFEST.json) for source revisions and file hashes.
-
-Version 0.1.0 distributed four Linux executables built from revision `628b6851` with `-O2 -fPIC`. Their helper source and corresponding upstream source remain available with the [v0.1.0 release](https://github.com/ayakacxy/cat-surface-gpu/releases/tag/v0.1.0).
-
-v0.3.0 includes CPU, CUDA and Metal implementations. Source provenance and adaptation records are retained in [upstream/](upstream/). Metal uses [MLX](https://github.com/ml-explore/mlx) as an external dependency.
-
-## SimNIBS
-
-[SimNIBS](https://github.com/simnibs/simnibs) provides the head-modeling workflow in which `CAT_Surf2Sphere` and `CAT_WarpSurf` are used for cortical surface registration. This package does not redistribute SimNIBS or modify a SimNIBS installation.
-
-## Python dependencies
-
-Versions 0.2.0 and 0.3.0 use [NumPy](https://github.com/numpy/numpy), [SciPy](https://github.com/scipy/scipy), [Numba](https://github.com/numba/numba), [nibabel](https://github.com/nipy/nibabel), and [CuPy](https://github.com/cupy/cupy) as external dependencies. They retain their respective licenses.
-
-Version 0.1.0 used [PyTorch](https://github.com/pytorch/pytorch) and [Triton](https://github.com/triton-lang/triton). They are not required by v0.2.0 or v0.3.0.
-
-Project code is distributed under [GPL-3.0-or-later](LICENSE), with upstream copyright and license notices retained.
+The [v0.1.0 release](https://github.com/ayakacxy/cat-surface-gpu/releases/tag/v0.1.0) used PyTorch and Triton and included four Linux executables built from CAT-Surface revision [`628b6851d8638f3ab773cd25c0ec406d0ec61ede`](https://github.com/ChristianGaser/CAT-Surface/tree/628b6851d8638f3ab773cd25c0ec406d0ec61ede) with `-O2 -fPIC`. The corresponding helper and upstream sources remain available with that release. Those dependencies and executables are not part of the current package.

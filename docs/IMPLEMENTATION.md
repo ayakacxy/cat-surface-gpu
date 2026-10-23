@@ -1,28 +1,16 @@
-# Implementation and Python API
+# Python API and implementation
 
 [English](IMPLEMENTATION.md) · [简体中文](IMPLEMENTATION.zh-CN.md)
 
-Version 0.3.0 implements spherical inflation and cortical surface registration in `cat_surface_gpu`. Its algorithm reference is CAT-Surface revision [`b0c2aa2395ea4957a331b9444fb54c7716b6572d`](https://github.com/ChristianGaser/CAT-Surface/tree/b0c2aa2395ea4957a331b9444fb54c7716b6572d).
+`cat_surface_gpu` provides spherical inflation and surface registration as array-based Python functions. File I/O uses GIFTI; computation runs on CPU, NVIDIA CUDA, or Apple Metal. Installation and command-line examples are in the [project README](../README.md).
 
-## Execution
+## Surface data
 
-NumPy and Numba handle CPU geometry, topology, and supporting calculations. CuPy RawKernel/RawModule kernels perform CUDA work, including spherical inflation and registration. The package runs independently, without CAT command-line programs or project-specific native extensions. CUDA kernel source is embedded in Python modules.
+A surface consists of an `(N, 3)` vertex array and an `(M, 3)` integer triangle array with zero-based indices. Inputs must be closed triangular meshes suitable for spherical mapping, with finite coordinates and no zero-area triangles.
 
-The complete workflow can use explicit CPU, CUDA or Metal backends. CPU execution uses NumPy/Numba. Metal uses MLX on Apple Silicon. Numba and CuPy kernel compilation can make the first invocation slower.
+Registration takes an anatomical surface and its sphere for both the source and the template. Within each pair, vertex order and triangles must match. The source and template may have different mesh resolutions. The output sphere keeps the source vertex order and triangles.
 
-## Surfaces and coordinates
-
-- Input GIFTI files must each contain one point-set array and one triangle array.
-- Vertex arrays have shape `(N, 3)`; triangle arrays have shape `(M, 3)` with zero-based indices.
-- Each source surface/sphere pair must use identical triangles and vertex ordering. The same applies to the template pair.
-- The source and template may have different vertex and triangle counts.
-- Surfaces must be closed triangular meshes with nonzero triangle areas, suitable for spherical mapping. This package does not reconstruct cortex from MRI or repair arbitrary input topology.
-- Output vertices use float32 and triangles use int32. The registered sphere retains source triangles.
-- GIFTI writing preserves image metadata, the label table, and the point-set/triangle metadata and coordinate-system transforms when a reference image is supplied. Extra data arrays, such as per-vertex measurements, are not copied.
-
-Input and output arrays are checked for finite coordinates and zero-area triangles. Very coarse synthetic meshes may degenerate during inflation and are rejected.
-
-The code operates on the supplied coordinates. It does not infer an MRI affine or convert anatomical coordinate systems.
+`load_gifti_surface(path)` reads one point-set array and one triangle array into a `GiftiSurface`. `save_gifti_surface(surface, path)` writes float32 vertices and int32 triangles. When a reference GIFTI is provided, image metadata, labels, array metadata, and coordinate-system transforms are retained; additional data arrays are not copied. Coordinates are used as supplied, without applying an MRI affine or converting coordinate systems.
 
 ## Spherical inflation
 
@@ -48,11 +36,22 @@ save_gifti_surface(
 )
 ```
 
-`surf_to_sphere(vertices, faces, parameters=None, topology=None, *, device="cuda", progress=None)` returns the new vertices and a timing dictionary. `Surf2SphereParameters` defaults to `stop_at=10`; the parameter controls the upstream inflation stages and area-smoothing schedule.
+The function signature is:
 
-`device` accepts `cpu`, `cuda`, `metal` and `auto`. The existing `surf_to_sphere_cupy(...)` remains available as a CUDA entry point.
+```text
+surf_to_sphere(
+    vertices, faces, parameters=None, topology=None,
+    *, device="cuda", progress=None,
+)
+```
 
-## Registration
+It returns `(vertices, timings)`. `stop_at=10` runs the full inflation schedule; smaller values stop earlier, and values below 5 produce an intermediate surface. An optional precomputed `SurfaceTopology` can be passed as `topology` when reusing the same mesh connectivity.
+
+`device` accepts `cpu`, `cuda`, `metal`, or `auto`. Automatic selection uses Metal on supported macOS systems, CUDA on other systems with an available NVIDIA GPU, and CPU otherwise. An explicitly selected backend raises an error if it is unavailable.
+
+`surf_to_sphere_cupy(...)` is also available as a CUDA-only entry point. To select a particular NVIDIA GPU in Python, call either CUDA entry point inside a `cupy.cuda.Device(index)` context.
+
+## Surface registration
 
 ```python
 from cat_surface_gpu import (
@@ -75,9 +74,7 @@ result = surfwarp_cupy(
     target.vertices,
     target_sphere.vertices,
     target.faces,
-    parameters=SurfWarpParameters(steps=2, runs=2, average=True),
-    solver_iterations=40,
-    solver_backend="pcg",
+    parameters=SurfWarpParameters(),
     backend="cupy",
 )
 save_gifti_surface(
@@ -86,31 +83,60 @@ save_gifti_surface(
 )
 ```
 
-The result includes `vertices`, `velocity`, `deformation`, `timings`, and `objectives`. Both main Python functions accept an optional `progress` callback that receives a stage string. The Python call expects already matched surface/sphere arrays; the CLI also checks the faces in each pair.
+Despite its name, `surfwarp_cupy` supports three backends: `"cupy"` for CUDA, `"cpu"`, and `"metal"`. It does not accept `"auto"`. The command-line interface accepts `--device auto` and selects the corresponding backend before calling this function.
 
-`backend` accepts `cpu`, `cupy` and `metal`. Metal uses fixed-iteration PCG with `pcg_check_interval=0`; CPU and CUDA support PCG and FMG.
+`SurfWarpResult` contains:
 
-| Setting | Default |
+| Field | Contents |
 | --- | --- |
-| Steps / runs | `2 / 2` |
-| Initial rotation / averaging | Enabled / enabled |
-| DARTEL loops | `6` |
-| Spherical map size | `512 x 256` |
-| Iterations per DARTEL level | `3` |
-| Linear solver | `pcg`, `40` iterations |
-| PCG convergence-check interval | `0` |
-| Rotation point chunk | `16384` |
-| Rotation refinement | Enabled, at most `500` iterations |
-| CLI CPU threads | `8` (supported range: `1–8`) |
+| `vertices` | Registered source sphere, including pole averaging when enabled |
+| `velocity` | Velocity field from the final main registration run |
+| `deformation` | Deformation field from that run |
+| `timings` | Stage timings and rotation settings |
+| `objectives` | Objective values recorded during registration |
 
-The supported registration uses type-5 depth features for one or two steps, membrane regularization (`regularization_type=1`), `code=1`, `multires_levels=0`, `lambda_value=0`, `surface_fwhm=0`, `resampled_triangles=81920`, and `cycles=3`. Other values outside the implemented path are rejected. This release does not implement every upstream CAT command-line mode.
+Use `vertices` as the final registered sphere. With multiple runs or pole averaging, `velocity` and `deformation` do not describe the entire transformation from the original input sphere.
 
-The default PCG solver follows a different numerical path from upstream full multigrid (FMG). `pcg_check_interval=0` disables intermediate CPU convergence checks; it does not reduce the requested 40 iterations. `solver_iterations` applies only to PCG. `solver_backend="fmg"` selects the available FMG implementation, but its name alone does not establish bitwise equivalence with CAT-Surface. Record the solver in every comparison.
+Both inflation and registration accept `progress`, a callback that receives stage messages as strings. File reading and writing are separate from the array API, so their cost is not included in its timing dictionaries.
 
-Lowering `rotation_point_chunk` from its default of `16384`, for example to `12288`, reduces the size of temporary rotation batches. Memory use and timing depend on the input and GPU.
+### Registration parameters
 
-## Command-line output
+The main options are defined by [`SurfWarpParameters`](../src/cat_surface_gpu/parameters.py):
 
-Both commands support `--device cpu`, `--device cuda`, `--device cuda:N`, `--device metal` or `--device auto`, `--threads`, and `--quiet`. They write stage progress to standard error and a final JSON summary to standard output. Use `--help` for the full option list.
+| Parameter | Default | Meaning |
+| --- | --- | --- |
+| `steps` | `2` | Number of type-5 depth feature scales; 1 or 2 |
+| `runs` | `2` | Successive registration runs |
+| `rotate` | `True` | Initial rigid rotation search |
+| `average` | `True` | Additional registration with rotated poles, followed by averaging |
+| `map_size` | `(512, 256)` | Width and height of the spherical map |
+| `loop` | `6` | DARTEL schedule levels |
+| `iterations` | `3` | DARTEL updates per level |
+| `curvature_fwhm` | `5.0` | Initial feature smoothing scale |
+| `mu` / `mu_rate` / `mu_change` | `0.125` / `1.25` / `4` | Membrane regularization schedule |
+| `lm_regularization` | `0.001` | Levenberg–Marquardt regularization |
 
-[Documentation index](README.md) · [Project README](../README.md)
+Additional keyword arguments to `surfwarp_cupy` control the solver and rotation:
+
+| Argument | Default | Meaning |
+| --- | --- | --- |
+| `solver_backend` | `"pcg"` | PCG or FMG; Metal supports PCG |
+| `solver_iterations` | `40` | PCG iteration limit; unused by FMG |
+| `pcg_check_interval` | `0` | Interval between convergence checks; 0 disables intermediate checks |
+| `rotation_point_chunk` | `16384` | Points processed per rotation batch |
+| `rotation_refine` | `True` | Refine the initial rotation estimate |
+| `rotation_max_iter` | `500` | Maximum rotation refinement iterations |
+
+Metal requires `solver_backend="pcg"` and `pcg_check_interval=0`. Reducing `rotation_point_chunk` reduces temporary rotation memory. It does not change the number of input vertices.
+
+The supported model uses type-5 depth features and membrane regularization. The following `SurfWarpParameters` values are fixed: `code=1`, `regularization_type=1`, `multires_levels=0`, `resampled_triangles=81920`, `lambda_value=0`, `surface_fwhm=0`, and `cycles=3`. Unsupported settings raise `ValueError`.
+
+## Implementation overview
+
+Inflation smooths the anatomical surface, projects it onto a sphere, and applies area smoothing. Registration estimates an initial rotation, resamples depth features onto spherical maps, optimizes a DARTEL velocity field, and maps the deformation back to the source vertices. Repeated runs and pole averaging are enabled by default.
+
+NumPy and Numba provide CPU geometry and numerical routines. CUDA kernels are embedded in Python modules and compiled by CuPy; the Metal backend uses MLX. The default CUDA and Metal registration paths use FP32 feature solves and DARTEL updates, with FP64 final velocity exponentiation. Kernel compilation and reusable topology/template caches affect first-run time.
+
+The algorithm reference is [CAT-Surface revision `b0c2aa23`](https://github.com/ChristianGaser/CAT-Surface/tree/b0c2aa2395ea4957a331b9444fb54c7716b6572d). Its reference solver is FMG; this package defaults to PCG. Comparisons should record solver settings alongside backend and precision. See [reproducibility](REPRODUCIBILITY.md) for the comparison procedure and [benchmarks](BENCHMARKS_v0.3.0.md) for measured results.
+
+[Documentation](README.md) · [Project README](../README.md)

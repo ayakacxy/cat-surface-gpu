@@ -1,50 +1,69 @@
-# Project Changelog
+# Changelog
 
 [English](CHANGELOG.md) · [简体中文](CHANGELOG.zh-CN.md)
 
-All notable changes are documented here.
+## [0.3.1] - 2026-10-23
+
+### Documentation
+
+- Rewrote the English and Chinese README, user guides, developer guides and release notes.
+- Added a dedicated report for the existing v0.3.0 benchmarks.
+- Consolidated version history and updated documentation links.
+- Rebuilt distribution packages with the updated documentation; algorithms and numerical behavior are unchanged.
+
+[Release notes](RELEASE_v0.3.1.md)
 
 ## [0.3.0] - 2026-10-18
 
-- Add CUDA tiled smoothing, FP32 feature solves, resident DARTEL and fixed-target caches.
-- Add complete CPU execution and MLX Metal dispatch, retaining both CLIs and CUDA array APIs.
-- Preserve parameter, GIFTI and fixed-PCG zero-residual checks; configure Windows/macOS CPU CI.
-- See [v0.3.0 notes](RELEASE_v0.3.0.md) for platform support, benchmarks and numerical comparisons.
+### Added
+
+- CPU execution on Linux, Windows and macOS.
+- MLX Metal backend for Apple Silicon.
+- Device selection in both commands and the `surf_to_sphere()` API.
+- CPU CI on Linux, Windows and macOS.
+
+### Changed
+
+- Accelerated CUDA smoothing with shared-memory tiles.
+- Added FP32 feature solves and DARTEL while retaining FP64 geometry assembly and final exponentiation.
+- Cached fixed topology and target features; removed repeated input checks within registration.
+
+[Release notes](RELEASE_v0.3.0.md) · [Benchmarks](BENCHMARKS_v0.3.0.md)
 
 ## [0.2.0] - 2026-10-13
 
-### Added and changed
+### Added
 
-- Added repeated same-input CPU/GPU command measurements, output comparisons, and a reproducible benchmark script in a documentation update after publication.
-- Replaced the PyTorch/Triton implementation and bundled CAT executables with a native Python implementation using NumPy, Numba, and CuPy.
-- Added NumPy/Numba geometry and topology routines, CuPy CUDA kernels, type-5 depth features, initial rotation, spherical resampling, and DARTEL registration.
-- Updated the fixed CAT-Surface reference from `628b6851` to `b0c2aa23`.
-- Added the `Surf2SphereParameters`, `SurfWarpParameters`, `surf_to_sphere_cupy`, and `surfwarp_cupy` API.
-- Retained the `cat-surf2sphere-gpu` and `cat-surfwarp-gpu` commands with options for the new implementation.
-- Fixed division by zero in PCG when the residual is exactly zero, including registration of identical surfaces. Iteration limits and nonzero calculations are unchanged.
-- Added checks for zero-area triangles in inputs and outputs, with clear errors for degenerate meshes.
-- Changed packaging to a Python-only wheel. CUDA execution still requires CuPy and an NVIDIA GPU.
-- Updated installation and usage instructions while retaining the existing documentation style; labeled historical v0.1.0 benchmarks separately.
+- Python implementations of geometry, depth features, rotation, resampling and DARTEL registration.
+- Parameter classes and array APIs for spherical inflation and registration.
+- Degenerate-triangle checks and GIFTI metadata preservation.
 
-### Compatibility
+### Changed
 
-The public API and backend options changed. Default DARTEL solves use 40 PCG iterations; they do not follow the same numerical path as upstream FMG. See [migration notes](MIGRATION.md) and [v0.2.0 release notes](RELEASE_v0.2.0.md).
+- Replaced PyTorch, Triton and bundled executables with NumPy, Numba and CuPy.
+- Updated the CAT-Surface reference to `b0c2aa23`.
+- Set the default registration solver to 40 FP64 PCG iterations.
+- Switched to a Python-only wheel and updated command options.
+
+### Fixed
+
+- Division by zero when a fixed-iteration PCG solve reaches exactly zero residual.
+
+[Release notes](RELEASE_v0.2.0.md) · [Benchmarks](BENCHMARKS_v0.2.0.md)
 
 ## [0.1.0] - 2026-08-21
 
-The first standalone release accelerated CAT-Surface with PyTorch and Triton while retaining upstream CPU programs and two helper executables.
-
 ### Added
 
-- Ordered GPU area smoothing for `CAT_Surf2Sphere`.
-- GPU `CAT_SurfWarp` registration with FP64 DARTEL, CUDA Graph support, initial rotation, averaging, and output writing.
-- Linux x86-64 reference/helper executables, corresponding source, and reproducible build scripts.
-- Command-line tools, Conda environment, CPU/CUDA tests, and numerical/performance comparisons.
-- Platform wheel, source archive, Linux bundle, upstream source archive, SBOM, and SHA-256 manifests.
+- PyTorch/Triton spherical inflation and FP64 DARTEL registration.
+- Initial rotation, spherical resampling, averaging and GIFTI output.
+- Linux x86-64 CPU reference and helper programs based on CAT-Surface `628b6851`, with source and build scripts.
+- Command-line tools, Conda environment, CPU/CUDA tests and benchmarks.
+- Platform wheel, Linux bundle, source archives, dependency inventory and SHA-256 checksums.
 
-### Compatibility
+[Release notes](RELEASE_v0.1.0.md) · [Benchmarks](BENCHMARKS.md)
 
-The reference revision was `628b6851d8638f3ab773cd25c0ec406d0ec61ede`. The [v0.1.0 release notes](RELEASE_v0.1.0.md) and [benchmarks](BENCHMARKS.md) describe that implementation. Their wording has been clarified for the v0.2.0 documentation; the v0.1.0 tag and release files remain unchanged.
-
+[0.3.1]: https://github.com/ayakacxy/cat-surface-gpu/releases/tag/v0.3.1
+[0.3.0]: https://github.com/ayakacxy/cat-surface-gpu/releases/tag/v0.3.0
 [0.2.0]: https://github.com/ayakacxy/cat-surface-gpu/releases/tag/v0.2.0
 [0.1.0]: https://github.com/ayakacxy/cat-surface-gpu/releases/tag/v0.1.0

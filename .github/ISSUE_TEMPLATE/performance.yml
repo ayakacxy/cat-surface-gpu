@@ -1,26 +1,29 @@
-name: Performance report / 性能报告
-description: Report a regression or submit a reproducible benchmark. / 报告性能退化，或提交可复现的基准测试。
-title: "[Performance / 性能]: "
+name: Performance report
+description: Report a slowdown or share a reproducible benchmark.
+title: "[Performance]: "
 labels: [performance]
 body:
+  - type: markdown
+    attributes:
+      value: Include enough detail to repeat the measurement. Do not attach patient data, identifying information, or credentials.
   - type: textarea
     id: hardware
     attributes:
-      label: Hardware and software / 硬件与软件
-      description: GPU, CPU, RAM, driver, CUDA, Python, backend, CuPy or MLX, NumPy, Numba, commit, and compiler. / 请提供 GPU、CPU、内存、驱动、CUDA、Python、后端、CuPy 或 MLX、NumPy、Numba、提交版本和编译器。
+      label: Hardware and software
+      description: Include the CPU, GPU, RAM, OS, Python, package version or commit, selected backend, and relevant driver and library versions.
     validations:
       required: true
   - type: textarea
     id: workload
     attributes:
-      label: Workload and parameters / 任务与参数
-      description: Shapes, precision, threads, steps, runs, warm-up, synchronization, and timing boundary. / 请说明数组形状、精度、线程数、steps、runs、预热、同步方式和计时范围。
+      label: Workload and measurement
+      description: Provide the command, vertex and face counts, solver settings, precision, thread count, cache state, repetitions, synchronization, and which steps the timing includes.
     validations:
       required: true
   - type: textarea
     id: results
     attributes:
-      label: Results and numerical error / 结果与数值误差
-      description: CPU/GPU wall time, repetitions, faces equality, and max/mean/p99 vertex errors. / 请提供 CPU/GPU 实际耗时、重复次数、三角形是否一致，以及最大、平均和第 99 百分位顶点误差。
+      label: Results
+      description: Include individual timings or a summary with the number of repetitions. For comparisons, identify the baseline and report topology equality and numerical differences.
     validations:
       required: true

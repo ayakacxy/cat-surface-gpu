@@ -1,11 +1,11 @@
 {
   "package": "cat-surface-gpu",
-  "version": "0.3.0",
-  "date": "2026-10-18",
+  "version": "0.3.1",
+  "date": "2026-10-23",
   "algorithm_upstream_commit": "b0c2aa2395ea4957a331b9444fb54c7716b6572d",
   "source_directory": "src/cat_surface_gpu",
   "sha256": {
-    "__init__.py": "a80a85c25e68ef44074d3d66da5233298f4efdc3239071358ef51f310d4ca1f0",
+    "__init__.py": "020fef012a0328aec3f555041500197dab534c870a328dd54ae28368c6efd3fd",
     "backends/__init__.py": "66e74799e92960f07ede8c95e82ef15f782eacbaebb1db7978e50af6940a4cc4",
     "backends/cpu/__init__.py": "66e74799e92960f07ede8c95e82ef15f782eacbaebb1db7978e50af6940a4cc4",
     "backends/cpu/surf2sphere.py": "36bb5c6bd616bfd2932aa8243c1e591acc2f7bbca3d52b038a189c23190c823a",

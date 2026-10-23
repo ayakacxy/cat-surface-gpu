@@ -1,50 +1,54 @@
-# 版本迁移指南
+# 升级指南
 
 [English](MIGRATION.md) · [简体中文](MIGRATION.zh-CN.md)
 
-## v0.2.0 → v0.3.0
+首次安装请从[项目首页](../README.zh-CN.md#install)开始。本指南说明升级时需要调整的脚本和环境。
 
-- 保留 CLI 名称、文件参数及 CUDA 数组接口，默认设备仍为 `cuda`。
-- 新增 `--device cpu`、`--device metal` 和 `--device auto`；Metal 安装使用 `.[metal]`，CPU 安装使用基础依赖。
-- 跨后端球面生成使用 `surf_to_sphere(..., device=...)`；配准使用 `surfwarp_cupy(..., backend="cpu" | "cupy" | "metal")`。
-- CUDA 和 Metal 的特征求解与 DARTEL 使用 FP32，最终指数映射保留 FP64。数值差异与性能见 [v0.3.0 版本说明](RELEASE_v0.3.0.zh-CN.md)。
+## 从 v0.2 升级到 v0.3
 
-## v0.1.0 → v0.2.0
+命令名称、文件参数和 CUDA 数组 API 保持兼容。默认设备仍为 `cuda`，已有 CUDA 命令不需要增加设备参数。
 
-v0.2.0 使用 NumPy、Numba 和 CuPy 的原生 Python 实现，替换了旧版 PyTorch/Triton 实现及 CAT 辅助程序。如果需要保留 v0.1.0 进行比较，请将新版安装到独立环境。
+CPU 和 Apple Metal 现已支持完整流程：
 
-### 依赖和文件
+| 后端 | 从源码目录安装 | CLI 选项 |
+| --- | --- | --- |
+| CPU | `python -m pip install .` | `--device cpu` |
+| NVIDIA CUDA | `python -m pip install ".[cuda]"` | `--device cuda` 或 `--device cuda:N` |
+| Apple Metal | `python -m pip install ".[metal]"` | `--device metal` |
 
-| v0.1.0 | v0.2.0 |
-| --- | --- |
-| PyTorch 和 Triton | NumPy、SciPy、Numba、nibabel 和 CuPy |
-| 随包发布 CAT 参考程序和辅助程序 | 不附带 CAT 可执行文件或本项目专用的原生扩展 |
-| Linux 平台 wheel | 仅含 Python 源码的 `py3-none-any` wheel，运行时仍需 CUDA |
-| CAT-Surface `628b6851` | CAT-Surface `b0c2aa23` |
+`--device auto` 选择可用的 GPU，没有受支持的 GPU 时使用 CPU。显式选择的后端不可用时会报错。
 
-软件包独立运行，GIFTI 曲面和模板需自行提供。
+### Python 调用
 
-### 命令
+球面生成调用示例为 `surf_to_sphere(..., device="cuda")`，设备可选 `cpu`、`cuda`、`metal` 和 `auto`。已有 CUDA 代码可以继续调用 `surf_to_sphere_cupy(...)`。
 
-两个主要命令名称及其输入、输出文件参数保持不变：
+配准调用示例为 `surfwarp_cupy(..., backend="cupy")`，后端可选 `cpu`、`cupy` 和 `metal`。CUDA 后端名称为 `cupy`，配准函数不接受 `auto`。Metal 要求 PCG 且 `pcg_check_interval=0`，默认设置已满足。完整示例和返回字段见 [Python API](IMPLEMENTATION.zh-CN.md)。
 
-- `cat-surf2sphere-gpu --input-surface ... --output-surface ...`
-- `cat-surfwarp-gpu --source-surface ... --source-sphere ... --target-surface ... --target-sphere ... --output ...`
+### 数值结果
 
-请移除 v0.1.0 的后端选项，包括 `--kernel triton`、`--dtype`、`--preprocess-kernel`、`--areal-schedule`、`--areal-arithmetic`、`--rotation-feature-backend`、`--stencil-threads`、`--dartel-dtype`、`--squaring-kernel` 和 `--cuda-graph`。v0.2.0 不再通过这些选项选择后端。CPU 计算使用 `--threads` 设置线程数，配准求解器使用 `--solver-backend` 和 `--solver-iterations` 设置。
+默认 CUDA 路径的特征求解和 DARTEL 更新改用 FP32，最终速度场指数映射仍使用 FP64。内核优化和缓存复用也改变了运行耗时。数值差异及同输入计时比较见 [v0.3 性能测试](BENCHMARKS_v0.3.0.zh-CN.md)。
 
-`--average` 及其别名 `--avg` 用于开启平均计算，该功能默认已经开启；使用 `--no-average` 可关闭。初始旋转也默认开启，可使用 `--no-rotate` 关闭。
+## 从 v0.1 升级
 
-旧版独立旋转命令不再提供，旋转由 `cat-surfwarp-gpu` 完成。当前用法见 [README 示例](../README.zh-CN.md#run)。
+Python 软件包不再需要 PyTorch、Triton 或 CAT 辅助程序。基础依赖为 NumPy、SciPy、Numba 和 nibabel，GPU 支持通过 CUDA 或 Metal 可选依赖安装。如需保留最初的实现用于比较，请使用独立环境。
 
-### Python 接口
+### 命令行变化
 
-使用 `surf_to_sphere_cupy` 替代 `run_cat_surf2sphere_gpu`，使用 `surfwarp_cupy` 替代 `run_cat_surface_gpu_pipeline`。新函数接收顶点和三角面数组，通过 `Surf2SphereParameters` 或 `SurfWarpParameters` 设置参数，与旧版接收文件路径的函数不能直接互换。具体用法见[接口示例](IMPLEMENTATION.zh-CN.md)。
+两条主要命令及其文件参数保持不变：
 
-### 结果与性能
+```text
+cat-surf2sphere-gpu --input-surface ... --output-surface ...
+cat-surfwarp-gpu --source-surface ... --source-sphere ... --target-surface ... --target-sphere ... --output ...
+```
 
-本版同时更换了上游源码版本和具体实现。v0.2.0 的 DARTEL 默认执行 40 次 PCG 迭代，官方参考实现使用 FMG。v0.1.0 的误差阈值和计时只适用于该版本；新版应与对应上游版本使用相同输入进行比较，再确定误差容限。
+删除旧选项 `--kernel`、`--dtype`、`--preprocess-kernel`、`--areal-schedule`、`--areal-arithmetic`、`--rotation-feature-backend`、`--stencil-threads`、`--dartel-dtype`、`--squaring-kernel` 和 `--cuda-graph`。使用 `--device` 选择后端、`--threads` 设置 CPU 线程数，使用 `--solver-backend` 和 `--solver-iterations` 设置配准求解器。
 
-历史记录中的双半球 55.2573 秒属于 v0.1.0 的 CAT 配准流程。v0.2.0 的完整命令耗时和输出差异见[v0.2.0 基准](BENCHMARKS_v0.2.0.zh-CN.md)。
+初始旋转和平均默认开启，可通过 `--no-rotate` 和 `--no-average` 关闭；`--avg` 是 `--average` 的别名。旋转已包含在 `cat-surfwarp-gpu` 中，不再提供独立的旋转命令。
 
-[返回文档目录](README.zh-CN.md) · [返回项目首页](../README.zh-CN.md)
+### Python 与参考实现变化
+
+以文件为输入的 `run_cat_surf2sphere_gpu` 和 `run_cat_surface_gpu_pipeline` 已替换为数组 API。使用 `load_gifti_surface` 读取 GIFTI，调用 `surf_to_sphere` 或 `surfwarp_cupy`，然后通过 `save_gifti_surface` 保存结果。示例见 [API 指南](IMPLEMENTATION.zh-CN.md)。
+
+算法参考版本从 CAT-Surface `628b6851` 更新为 `b0c2aa23`，默认配准求解器采用 PCG，参考实现采用 FMG。更新数值基线时，应使用相同输入比较输出。历次发布记录可从[更新日志](CHANGELOG.zh-CN.md)查阅。
+
+[文档目录](README.zh-CN.md) · [项目首页](../README.zh-CN.md)

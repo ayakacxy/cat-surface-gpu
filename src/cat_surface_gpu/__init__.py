@@ -1,6 +1,6 @@
 """基于官方 CAT-Surface 算法独立实现的 Python/CuPy 后端。"""
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 
 from .parameters import Surf2SphereParameters, SurfWarpParameters
 from .dartel import (

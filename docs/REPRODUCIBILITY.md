@@ -1,52 +1,56 @@
-# Reproducibility and Provenance Guide
+# Reproducing results
 
 [English](REPRODUCIBILITY.md) · [简体中文](REPRODUCIBILITY.zh-CN.md)
 
-## v0.3.0 tests and benchmarks
+Use the same input surfaces, template, parameters, and solver when comparing runs. The [benchmark report](BENCHMARKS_v0.3.0.md) describes the published measurements; [benchmark-v0.3.0.json](benchmark-v0.3.0.json) contains the individual timings, input hashes, and numerical results.
 
-On 2026-10-18, Linux testing on an RTX 2080 Ti completed with **60 passed, 1 skipped**. The skipped test requires macOS and Metal. Same-input comparisons against v0.2.0 cover single-surface CLI execution and numerical differences; a separate bilateral run covers generation, registration and four compressed GIFTI outputs. See the [version notes](RELEASE_v0.3.0.md) and [benchmark record](benchmark-v0.3.0.json) for settings, individual measurements and input hashes.
+## Record a run
 
-## v0.2.0 release checks
+Keep the command and its JSON output together with:
 
-On 2026-10-13, all 57 tests passed on an RTX 2080 Ti, including eight CUDA tests. The installed wheel completed both command-line workflows on full fsaverage templates, passing the generated sphere directly to registration. Each input had 163,842 vertices and 327,680 triangles. Both commands used their default settings, including `rotation_point_chunk=16384` for registration. Outputs retained the input triangles and contained finite coordinates with no zero-area triangles.
+- package version or Git commit;
+- operating system, Python version, and backend dependency versions;
+- CPU/GPU model, CPU thread count, and selected device;
+- SHA-256 hashes and vertex/triangle counts for each input;
+- registration parameters, solver, and iteration settings.
 
-The [machine-readable record](validation-v0.2.0.json) includes input and source hashes, dependency versions, parameters, and results. These checks cover the installed workflow on the stated templates; they do not establish accuracy across subjects or a speedup over the official C implementation. Separate zero-residual regression tests cover the PCG division-by-zero fix.
+Both commands send progress to standard error and their final JSON summary to standard output. For example:
 
-The subsequent [v0.2.0 benchmarks](BENCHMARKS_v0.2.0.md) measure complete CPU/GPU commands using the same inputs and report coordinate differences against the pinned C reference. Their [JSON record](benchmark-v0.2.0.json) includes the individual measurements and parameters.
+```bash
+cat-surf2sphere-gpu --input-surface white.gii --output-surface sphere.gii --device cuda --threads 8 > sphere.json 2> sphere.log
+cat-surfwarp-gpu --source-surface white.gii --source-sphere sphere.gii --target-surface template.white.gii --target-sphere template.sphere.gii --output sphere.reg.gii --device cuda --threads 8 > registration.json 2> registration.log
+```
 
-## Record the version and environment
+Use the `device` field to identify the selected device. The JSON `backend` field is a fixed implementation label; it does not identify whether a particular command used CPU, CUDA, or Metal.
 
-For each run, record:
+Input files should remain unchanged between runs. Save outputs from each configuration separately. For version comparisons, use separate source checkouts or environments so that package imports and compilation caches can be identified unambiguously.
 
-- package version and source revision;
-- CAT-Surface reference revision `b0c2aa2395ea4957a331b9444fb54c7716b6572d`;
-- operating system, selected backend, Python and dependency versions, including CuPy/CUDA/driver or MLX/macOS as applicable;
-- GPU model, CPU thread count, and peak host/GPU memory;
-- input hashes, vertex/triangle counts, parameters, solver, and iteration count.
+## Compare surfaces
 
-The fixed upstream revision is also recorded in [UPSTREAM.lock](../UPSTREAM.lock). Version 0.1.0 used a different revision and implementation; its evidence is archived in [BENCHMARKS.md](BENCHMARKS.md).
+First check vertex counts, exact triangle equality, finite coordinates, and nonzero triangle areas. Then compare matching vertices. Useful summaries are mean, maximum, and 95th-percentile Euclidean distance. For spherical outputs, angular differences in degrees also make the scale of the difference clear.
 
-## Validation layers
+State the metric and units with the result: a per-coordinate absolute error is different from a per-vertex Euclidean distance. Coordinate agreement measures numerical reproducibility; anatomical registration quality requires an anatomical evaluation, such as landmark or region correspondence.
 
-1. Inspect the built wheel and source archive for required code and notices, and confirm that no CAT executables or project-specific extensions are included.
-2. Run CPU tests for geometry, indexing, topology, interpolation, and input validation.
-3. Run CUDA tests on an NVIDIA GPU and Metal tests on Apple Silicon macOS. Record skipped tests separately.
-4. Compare complete sphere and registered-sphere outputs against an independently run reference using the same inputs and parameters.
+The algorithm reference is the CAT-Surface revision pinned in [UPSTREAM.lock](../UPSTREAM.lock). The reference uses full multigrid (FMG), while this package defaults to preconditioned conjugate gradients (PCG). CPU and CUDA also provide an FMG option. Record the actual solver, since matching input files alone does not make two numerical methods equivalent.
 
-For surface comparisons, report exact triangle equality and coordinate differences using clearly stated units. Include the maximum, mean, and an upper percentile; state whether errors are per-coordinate absolute differences or per-vertex Euclidean distances. Check finite coordinates and vertex counts before computing statistics.
+## Measure runtime
 
-Versions 0.2.0 and 0.3.0 default to a PCG linear solver. Upstream CAT-Surface uses FMG, so equal inputs and iteration labels do not imply identical solver trajectories. Set numerical tolerances before evaluating results and record which solver was used. The v0.1.0 `1e-3` threshold is not automatically a v0.2.0 acceptance threshold.
+A complete command measurement starts before the process launches and ends after it exits. It includes Python startup, imports, file reading, backend initialization, calculation, and file writing. The CLI's `wall_seconds` begins after argument parsing; the API's stage timings cover a smaller part of the operation. Keep these three measurements distinct.
 
-## Measure the complete operation
+Report first-run and warm-cache results separately. The first run may include Numba/CuPy/MLX compilation and topology/template preparation. For repeated runs, state whether they use fresh processes with existing disk caches or reuse one Python process. Use at least three repetitions and report the median and range.
 
-Measure input reading, preprocessing, transfers, GPU computation, output transfer, and file writing together when reporting end-to-end time. Synchronize the GPU before stopping timers. Report whether interpreter startup, Numba/CuPy/MLX compilation, and cache loading are included. Separate first-run measurements from repeated runs with established caches.
+For bilateral work, specify whether a measurement includes one or both hemispheres, whether they run serially or concurrently, and whether all output files have finished writing. Synchronize GPU work before stopping a manually placed timer.
 
-Use repeated same-input runs and report the run count and spread. For bilateral runs, state whether hemispheres run serially or share the GPU concurrently. Report kernel timings separately from complete sphere-generation and registration timings.
+The repository includes `tools/benchmark_versions.py` for comparing complete command executions between two source trees. It records first-run and repeated timings, source and input hashes, and output differences. Its required input paths and options are listed by:
 
-## Synthetic and anatomical inputs
+```bash
+python tools/benchmark_versions.py --help
+```
 
-The repository distributes no anatomical or subject data. Synthetic fixtures test installation, file I/O, and small numerical operations. Very coarse synthetic meshes can collapse during the full inflation schedule; use suitable anatomical meshes to validate the complete sphere-to-registration workflow. These fixtures do not reproduce anatomical performance or establish anatomical registration accuracy.
+## Caches and test data
 
-Keep benchmark inputs read-only. Store caches, logs, reference outputs, and candidate outputs under separate paths within a task directory such as `.work/comparison/`. Set `TMPDIR`, `TMP`, `TEMP`, `XDG_CACHE_HOME`, `NUMBA_CACHE_DIR`, `CUPY_CACHE_DIR`, and `CAT_SURFACE_CACHE_ROOT` before running, as shown in the [README](../README.md#run).
+`CAT_SURFACE_CACHE_ROOT` controls the package's topology and template cache; its default is `.work/cat-surface/cache` relative to the working directory. Numba and CuPy use `NUMBA_CACHE_DIR` and `CUPY_CACHE_DIR` for their compilation caches. Separate cache directories are useful when measuring first-run cost. The [build guide](BUILDING.md#prepare-the-environment) shows a project-local setup for Linux, macOS, and Windows.
 
-The upstream reference may be built and run separately for comparison. It is neither a dependency of the candidate workflow nor an automatic fallback.
+Synthetic meshes are useful for installation, I/O, and small numerical tests. Full inflation and registration should use meshes representative of the intended anatomical workflow: very coarse meshes can collapse during inflation, and their runtime does not represent a cortical mesh. The repository does not distribute subject data or anatomical templates.
+
+[Documentation](README.md) · [Project README](../README.md)

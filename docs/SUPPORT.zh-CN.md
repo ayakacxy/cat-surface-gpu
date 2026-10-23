@@ -1,9 +1,14 @@
-# 支持与问题咨询
+# 获取帮助
 
 [English](SUPPORT.md) · [简体中文](SUPPORT.zh-CN.md)
 
-安装和使用问题请在 GitHub Discussions 中提出；可复现的软件缺陷或性能问题请使用相应的 issue 模板。提交前请先搜索已有报告。
+- **安装和使用问题：**在 [GitHub Discussions](https://github.com/ayakacxy/cat-surface-gpu/discussions) 中提问。
+- **软件缺陷：**提交[缺陷报告](https://github.com/ayakacxy/cat-surface-gpu/issues/new?template=bug_report.yml)。
+- **性能问题：**使用[性能报告模板](https://github.com/ayakacxy/cat-surface-gpu/issues/new?template=performance.yml)。
+- **安全漏洞：**按[安全政策](SECURITY.zh-CN.md)提交。
 
-这是一个独立的加速项目，并非 SimNIBS 或 CAT-Surface 的官方支持渠道。关于上游软件行为的问题，请向相应的上游项目咨询。
+提交前请先搜索已有的讨论和 issue。报告中应包含软件包版本、操作系统、CPU 或 GPU、所选后端、完整命令和报错信息。尽量提供一个小规模的合成示例，方便其他人复现问题。
 
-不要上传可识别个人身份的医学影像。有效的问题报告应包含软件版本、硬件配置、完整命令、完整报错信息，以及合成或匿名化的复现数据。
+性能报告还应说明表面大小、求解器设置、缓存状态，以及耗时包含哪些步骤，详见[复现指南](REPRODUCIBILITY.zh-CN.md)。
+
+公开报告建议使用英文，方便更多贡献者参与；也欢迎使用中文。分享日志前请移除凭据和身份信息，不要上传患者影像或可识别身份的表面数据。
